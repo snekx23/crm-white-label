@@ -1,0 +1,53 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { Sidebar } from "@/components/app/sidebar";
+import { Topbar } from "@/components/app/topbar";
+import { TenantTheme } from "@/components/app/tenant-theme";
+import { TenantPageTitle } from "@/components/app/tenant-page-title";
+import { getCurrentContext } from "@/lib/tenant";
+import { createClient } from "@/lib/supabase/server";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const ctx = await getCurrentContext();
+  if (!ctx) {
+    return { title: "SolAIre W+ CRM" };
+  }
+  const name = ctx.tenant.name.trim() || "Empresa";
+  return {
+    title: {
+      default: `${name} CRM`,
+      template: `%s · ${name}`,
+    },
+  };
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const ctx = await getCurrentContext();
+  if (!ctx) redirect("/login");
+
+  const supabase = await createClient();
+  const [{ data: profile }, { data: { user } }] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("id", ctx.userId).single(),
+    supabase.auth.getUser(),
+  ]);
+
+  return (
+    <>
+      <TenantTheme brandColor={ctx.tenant.brand_color} />
+      <TenantPageTitle tenantName={ctx.tenant.name} />
+      <div className="flex min-h-screen">
+        <Sidebar
+          tenantName={ctx.tenant.name}
+          tenantLogoUrl={ctx.tenant.logo_url}
+          tenantTagline={ctx.tenant.tagline}
+          userName={profile?.full_name ?? "Usuario"}
+          userEmail={user?.email ?? ""}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="flex-1 overflow-auto">{children}</main>
+        </div>
+      </div>
+    </>
+  );
+}

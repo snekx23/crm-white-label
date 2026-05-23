@@ -1,0 +1,25 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.sortOrder": "type",
+  "explorer.autoReveal": true,
+  "files.exclude": {
+    "**/.next": true,
+    "**/.open-next": true,
+    "**/.wrangler": true
+  },
+  "search.exclude": {
+    "**/.next": true,
+    "**/.open-next": true,
+    "**/node_modules": true,
+    "**/package-lock.json": true
+  },
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json, pnpm-lock.yaml, yarn.lock, bun.lockb",
+    "tsconfig.json": "tsconfig.*.json, next-env.d.ts",
+    "next.config.mjs": "postcss.config.mjs, tailwind.config.ts, open-next.config.ts",
+    "wrangler.jsonc": ".env.example",
+    "README.md": "BRANDING.md",
+    "page.tsx": "loading.tsx, error.tsx, charts.tsx, actions.ts, manager.tsx, conversation-list.tsx, kanban-board.tsx, chat-thread.tsx, movement-form.tsx, new-product-dialog.tsx, import-csv-dialog.tsx, new-lead-dialog.tsx, lead-files-panel.tsx, lead-stage-select.tsx, whatsapp-form.tsx, tenant-form.tsx"
+  }
+}

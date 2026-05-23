@@ -1,0 +1,157 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { WhatsAppAccount, WhatsAppProviderKind } from "@/lib/supabase/database.types";
+import { saveWhatsAppAccount, testWhatsAppConnection } from "./actions";
+
+export function WhatsAppForm({ initial }: { initial: WhatsAppAccount | null }) {
+  const [provider, setProvider] = useState<WhatsAppProviderKind>(initial?.provider ?? "cloud_api");
+  const [phone, setPhone] = useState(initial?.phone_number ?? "");
+  const [displayName, setDisplayName] = useState(initial?.display_name ?? "");
+  const [active, setActive] = useState(initial?.is_active ?? true);
+  const [creds, setCreds] = useState<Record<string, string>>(
+    (initial?.credentials as Record<string, string> | undefined) ?? {},
+  );
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  const fields = providerFields(provider);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    start(async () => {
+      try {
+        await saveWhatsAppAccount({
+          id: initial?.id,
+          provider,
+          phone_number: phone,
+          display_name: displayName,
+          credentials: creds,
+          is_active: active,
+        });
+        setMsg("Salvo com sucesso");
+      } catch (err) {
+        setMsg((err as Error).message);
+      }
+    });
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Provider</Label>
+          <Select value={provider} onValueChange={(v) => setProvider(v as WhatsAppProviderKind)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cloud_api">Meta Cloud API (oficial)</SelectItem>
+              <SelectItem value="evolution">Evolution API</SelectItem>
+              <SelectItem value="zapi">Z-API</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Numero de telefone</Label>
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="5511999999999" required />
+        </div>
+        <div className="space-y-1.5 md:col-span-2">
+          <Label>Nome exibido</Label>
+          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+        <h3 className="text-sm font-semibold">Credenciais ({provider})</h3>
+        {provider === "zapi" && (
+          <ul className="list-inside list-disc space-y-1 text-xs text-muted-foreground">
+            <li>Instância conectada (QR Code) no painel Z-API</li>
+            <li>Client Token em Segurança → Token de segurança da conta (ative o token)</li>
+            <li>Webhook para receber: URL em Integrações → WhatsApp</li>
+            <li>Ao salvar ou testar, o CRM ativa a captura das mensagens enviadas pelo WhatsApp do celular</li>
+          </ul>
+        )}
+        <div className="grid gap-3 md:grid-cols-2">
+          {fields.map((f) => (
+            <div key={f.key} className="space-y-1.5">
+              <Label>{f.label}</Label>
+              <Input
+                type={f.secret ? "password" : "text"}
+                value={creds[f.key] ?? ""}
+                onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })}
+                placeholder={f.placeholder}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          id="active"
+          type="checkbox"
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+        />
+        <Label htmlFor="active">Conta ativa</Label>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">{msg ?? testMsg}</p>
+        <div className="flex gap-2">
+          {provider === "zapi" && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                setTestMsg(null);
+                start(async () => {
+                  const r = await testWhatsAppConnection({ provider, credentials: creds });
+                  setTestMsg(r.ok ? `OK - ${r.message}` : `Erro - ${r.message}`);
+                });
+              }}
+            >
+              Testar Z-API
+            </Button>
+          )}
+          <Button type="submit" variant="brand" disabled={pending}>
+            {pending ? "Salvando..." : "Salvar"}
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function providerFields(p: WhatsAppProviderKind) {
+  if (p === "cloud_api") {
+    return [
+      { key: "phone_number_id", label: "Phone Number ID", placeholder: "123456789", secret: false },
+      { key: "access_token", label: "Access Token", placeholder: "EAA...", secret: true },
+      { key: "app_secret", label: "App Secret (opcional)", placeholder: "", secret: true },
+    ];
+  }
+  if (p === "evolution") {
+    return [
+      { key: "base_url", label: "URL Base", placeholder: "https://api.evolution.example.com", secret: false },
+      { key: "instance", label: "Instancia", placeholder: "minha-instancia", secret: false },
+      { key: "api_key", label: "API Key", placeholder: "", secret: true },
+    ];
+  }
+  return [
+    { key: "instance_id", label: "Instance ID", placeholder: "Copie do painel Z-API → Instância", secret: false },
+    { key: "token", label: "Token da instância", placeholder: "Token da URL da instância", secret: true },
+    {
+      key: "client_token",
+      label: "Client Token (conta)",
+      placeholder: "Segurança → Token de segurança da conta",
+      secret: true,
+    },
+  ];
+}

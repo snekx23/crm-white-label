@@ -1,0 +1,400 @@
+import { NextRequest, NextResponse } from "next/server";
+
+import { createServiceClient } from "@/lib/supabase/server";
+
+import { createProvider } from "@/lib/whatsapp/factory";
+
+import { ensureZapiPhoneMessageSync } from "@/lib/whatsapp/ensure-zapi-phone-sync";
+
+import { ZAPI_PHONE_PLACEHOLDER } from "@/lib/whatsapp/zapi";
+
+import { unwrapZapiPayloadForLog } from "@/lib/whatsapp/zapi-log";
+
+import { findOrCreateWhatsAppLead } from "@/lib/leads/find-or-create";
+
+import { applyMessageStatusUpdates } from "@/lib/whatsapp/apply-message-status";
+import { isSelfWhatsAppContact } from "@/lib/whatsapp/self-contact";
+import {
+  parseZapiMessageStatusUpdates,
+  shouldUpgradeMessageStatus,
+  type DbMessageStatus,
+} from "@/lib/whatsapp/zapi-status";
+
+import { isValidBrazilWhatsAppPhone, normalizeWhatsAppPhone } from "@/lib/whatsapp/phone";
+
+import type { WhatsAppAccount, WhatsAppProviderKind } from "@/lib/supabase/database.types";
+
+
+
+export const dynamic = "force-dynamic";
+
+
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
+
+  const { provider } = await params;
+
+  if (provider !== "cloud_api") return new NextResponse("Not Found", { status: 404 });
+
+
+
+  const url = new URL(req.url);
+
+  const mode = url.searchParams.get("hub.mode");
+
+  const token = url.searchParams.get("hub.verify_token");
+
+  const challenge = url.searchParams.get("hub.challenge");
+
+  if (mode === "subscribe" && token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+
+    return new NextResponse(challenge, { status: 200 });
+
+  }
+
+  return new NextResponse("Forbidden", { status: 403 });
+
+}
+
+
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
+
+  const { provider } = await params;
+
+  const validKinds: WhatsAppProviderKind[] = ["cloud_api", "evolution", "zapi"];
+
+  if (!validKinds.includes(provider as WhatsAppProviderKind)) {
+
+    return new NextResponse("Provider invalido", { status: 400 });
+
+  }
+
+
+
+  const payload = (await req.json()) as unknown;
+
+
+
+  const supabase = createServiceClient();
+
+
+
+  const { data: accounts } = await supabase
+
+    .from("whatsapp_accounts")
+
+    .select("*")
+
+    .eq("provider", provider as WhatsAppProviderKind)
+
+    .eq("is_active", true);
+
+
+
+  if (!accounts || accounts.length === 0) {
+
+    return new NextResponse("Nenhuma conta configurada", { status: 200 });
+
+  }
+
+
+
+  let account: WhatsAppAccount = accounts[0];
+
+  if (provider === "cloud_api") {
+
+    const entry = (payload as { entry?: Array<{ changes?: Array<{ value?: { metadata?: { display_phone_number?: string } } }> }> }).entry?.[0];
+
+    const phone = entry?.changes?.[0]?.value?.metadata?.display_phone_number?.replace(/\D/g, "");
+
+    const matched = accounts.find((a) => a.phone_number.replace(/\D/g, "") === phone);
+
+    if (matched) account = matched;
+
+  }
+
+  if (provider === "zapi") {
+
+    const raw = payload as { instanceId?: string; data?: { instanceId?: string } };
+
+    const instanceId = raw.instanceId ?? raw.data?.instanceId;
+
+    if (instanceId) {
+
+      const matched = accounts.find((a) => {
+
+        const creds = a.credentials as { instance_id?: string };
+
+        return creds.instance_id === instanceId;
+
+      });
+
+      if (matched) account = matched;
+
+    }
+
+  }
+
+
+
+  if (provider === "zapi") {
+    await ensureZapiPhoneMessageSync(supabase, account);
+  }
+
+  if (provider === "zapi") {
+    const statusUpdates = parseZapiMessageStatusUpdates(payload);
+    if (statusUpdates.length > 0) {
+      const applied = await applyMessageStatusUpdates(
+        supabase,
+        account.tenant_id,
+        statusUpdates,
+      );
+      return NextResponse.json({ ok: true, parsed: 0, statusUpdates: applied });
+    }
+  }
+
+  const adapter = createProvider(account);
+  const messages = adapter.parseWebhook(payload);
+
+  if (provider === "zapi") {
+    const logPayload = unwrapZapiPayloadForLog(payload);
+    void supabase.from("whatsapp_webhook_logs").insert({
+      tenant_id: account.tenant_id,
+      whatsapp_account_id: account.id,
+      event_type: logPayload?.type ?? null,
+      from_me: logPayload?.fromMe ?? null,
+      contact_phone: logPayload?.phone ?? null,
+      contact_lid: logPayload?.chatLid ?? logPayload?.senderLid ?? null,
+      parsed_count: messages.length,
+      payload: payload as Record<string, unknown>,
+    });
+  }
+
+
+
+  for (const msg of messages) {
+
+    const contactPhone = msg.contactPhone ?? (msg.fromPhone.includes("@lid") ? null : normalizeWhatsAppPhone(msg.fromPhone));
+
+    const contactLid = msg.contactLid ?? null;
+
+
+
+    if (!contactPhone && !contactLid) continue;
+
+    if (contactPhone && !isValidBrazilWhatsAppPhone(contactPhone)) continue;
+
+    if (isSelfWhatsAppContact(account, { phone: contactPhone, lid: contactLid })) continue;
+
+    if (msg.externalId) {
+
+      const { data: existingMsg } = await supabase
+
+        .from("messages")
+
+        .select("id, body, status")
+
+        .eq("tenant_id", account.tenant_id)
+
+        .eq("external_id", msg.externalId)
+
+        .maybeSingle();
+
+      if (existingMsg) {
+
+        const prevBody = (existingMsg as { body?: string | null }).body ?? "";
+
+        const canUpgradeBody =
+
+          msg.body &&
+
+          msg.body !== ZAPI_PHONE_PLACEHOLDER &&
+
+          prevBody === ZAPI_PHONE_PLACEHOLDER;
+
+        const currentStatus = (existingMsg as { status?: DbMessageStatus | null }).status;
+
+        const canUpgradeStatus =
+          msg.messageStatus &&
+          shouldUpgradeMessageStatus(currentStatus, msg.messageStatus);
+
+        if (canUpgradeBody || canUpgradeStatus) {
+
+          await supabase
+
+            .from("messages")
+
+            .update({
+
+              ...(canUpgradeBody
+                ? {
+                    body: msg.body,
+                    media_url: msg.mediaUrl ?? null,
+                    media_type: msg.mediaType ?? null,
+                  }
+                : {}),
+              ...(canUpgradeStatus ? { status: msg.messageStatus } : {}),
+            })
+
+            .eq("id", existingMsg.id);
+
+        }
+
+        continue;
+
+      }
+
+    }
+
+
+
+    const isInbound = msg.direction === "inbound";
+
+    const phoneDigits = contactPhone ?? undefined;
+
+
+
+    const { data: pipeline } = await supabase
+
+      .from("pipelines")
+
+      .select("id, pipeline_stages(id, position)")
+
+      .eq("tenant_id", account.tenant_id)
+
+      .eq("is_default", true)
+
+      .single();
+
+    const stages = (pipeline as { pipeline_stages?: { id: string; position: number }[] } | null)
+
+      ?.pipeline_stages?.sort((a, b) => a.position - b.position);
+
+    const stageId = stages?.[0]?.id;
+
+    const pipelineId = (pipeline as { id?: string } | null)?.id;
+
+    const leadId = await findOrCreateWhatsAppLead(supabase, account.tenant_id, {
+
+      phone: phoneDigits,
+
+      lid: contactLid,
+
+      name: msg.contactName,
+
+      stageId,
+
+      pipelineId,
+
+    });
+
+
+
+    if (!leadId) continue;
+
+
+
+    const { data: existingConv } = await supabase
+
+      .from("conversations")
+
+      .select("id, unread_count")
+
+      .eq("tenant_id", account.tenant_id)
+
+      .eq("lead_id", leadId)
+
+      .eq("channel", "whatsapp")
+
+      .maybeSingle();
+
+
+
+    let conversationId = existingConv?.id as string | undefined;
+
+    if (!conversationId) {
+
+      const { data: created } = await supabase
+
+        .from("conversations")
+
+        .insert({
+
+          tenant_id: account.tenant_id,
+
+          lead_id: leadId,
+
+          whatsapp_account_id: account.id,
+
+          channel: "whatsapp",
+
+          last_message_at: msg.timestamp,
+
+          unread_count: isInbound ? 1 : 0,
+
+        })
+
+        .select("id")
+
+        .single();
+
+      conversationId = created?.id;
+
+    } else {
+
+      const unread = (existingConv as { unread_count?: number | null }).unread_count ?? 0;
+
+      await supabase
+
+        .from("conversations")
+
+        .update({
+
+          last_message_at: msg.timestamp,
+
+          unread_count: isInbound ? unread + 1 : unread,
+
+        })
+
+        .eq("id", conversationId);
+
+    }
+
+
+
+    if (!conversationId) continue;
+
+
+
+    await supabase.from("messages").insert({
+
+      tenant_id: account.tenant_id,
+
+      conversation_id: conversationId,
+
+      direction: msg.direction,
+
+      body: msg.body,
+
+      media_url: msg.mediaUrl,
+
+      media_type: msg.mediaType,
+
+      external_id: msg.externalId || null,
+
+      status: isInbound ? "delivered" : (msg.messageStatus ?? "sent"),
+
+      created_at: msg.timestamp,
+
+    });
+
+  }
+
+
+
+  return NextResponse.json({ ok: true, parsed: messages.length });
+
+}
+
+

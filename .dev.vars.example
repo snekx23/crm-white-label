@@ -1,0 +1,9 @@
+# Copie para .dev.vars (nao commitar) — usado pelo wrangler dev / deploy local
+# Valores de producao: Cloudflare Dashboard > Workers > solaire-w-crm > Settings > Variables
+# ou: npx wrangler secret put NOME_DA_VARIAVEL
+
+NEXT_PUBLIC_SUPABASE_URL=https://SEU_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
+SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=token-aleatorio-webhook

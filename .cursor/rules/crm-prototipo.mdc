@@ -1,0 +1,21 @@
+---
+description: Onde está cada coisa neste monorepo Next.js (SolAIre W+ CRM Prototipo)
+globs: "**/*.{ts,tsx,js,mjs,css,json,jsonc,md,sql}"
+alwaysApply: true
+---
+
+## Pastas na raiz
+
+- **`app/`** — Next.js App Router: páginas `(auth)`, `(app)`, layouts e **`app/api/`** (webhooks WhatsApp, intake de leads).
+- **`components/`** — UI reutilizável: `components/ui/` (primitivos estilo shadcn), `components/app/` (sidebar, topbar, logo).
+- **`lib/`** — Lógica compartilhada: `lib/supabase/` (clients + `database.types.ts`), `lib/whatsapp/` (providers + `sendTemplate` na Cloud API), `lib/tenant.ts`, `lib/utils.ts`.
+- **`supabase/migrations/`** — SQL versionado (schema, RLS).
+- **`middleware.ts`** — sessão Supabase e rotas públicas.
+
+## Imports
+
+Alias **`@/*`** aponta para a **raiz do projeto** (ex.: `@/components/ui/button`, `@/lib/supabase/server`).
+
+## Deploy
+
+Script **`npm run deploy`**: OpenNext + Wrangler (Workers). Variáveis em `wrangler.jsonc`.
