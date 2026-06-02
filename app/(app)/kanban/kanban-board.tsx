@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -33,12 +34,17 @@ type Lead = {
 };
 
 export function KanbanBoard({
+  pipelines,
+  activePipelineId,
   initialStages,
   initialLeads,
 }: {
+  pipelines: { id: string; name: string; is_default: boolean }[];
+  activePipelineId: string | null;
   initialStages: Stage[];
   initialLeads: Lead[];
 }) {
+  const router = useRouter();
   const [stages] = useState(initialStages);
   const [leads, setLeads] = useState(initialLeads);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -50,7 +56,7 @@ export function KanbanBoard({
       .channel("leads-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "leads" },
+        { event: "*", schema: "public", table: "leads", filter: activePipelineId ? `pipeline_id=eq.${activePipelineId}` : undefined },
         (payload) => {
           if (payload.eventType === "INSERT") {
             setLeads((prev) => [...prev, payload.new as Lead]);
@@ -63,7 +69,7 @@ export function KanbanBoard({
       )
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, []);
+  }, [activePipelineId]);
 
   const leadsByStage = useMemo(() => {
     const map = new Map<string, Lead[]>();
@@ -130,14 +136,30 @@ export function KanbanBoard({
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
     >
-      <div className="flex h-full gap-4 overflow-x-auto pb-2">
-        {stages.map((stage) => {
-          const stageLeads = leadsByStage.get(stage.id) ?? [];
-          const total = stageLeads.reduce((acc, l) => acc + (l.value_cents ?? 0), 0);
-          return (
-            <Column key={stage.id} stage={stage} leads={stageLeads} total={total} />
-          );
-        })}
+      <div className="flex h-full flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <label htmlFor="pipeline-select" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Funil
+          </label>
+          <select
+            id="pipeline-select"
+            value={activePipelineId ?? ""}
+            onChange={(event) => router.push(`/kanban?pipeline=${event.target.value}`)}
+            className="h-9 min-w-64 rounded-md border border-border bg-card px-3 text-sm font-medium outline-none transition-colors focus:border-brand"
+          >
+            {pipelines.length === 0 && <option value="">Nenhum funil configurado</option>}
+            {pipelines.map((pipeline) => <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
+          {stages.map((stage) => {
+            const stageLeads = leadsByStage.get(stage.id) ?? [];
+            const total = stageLeads.reduce((acc, l) => acc + (l.value_cents ?? 0), 0);
+            return (
+              <Column key={stage.id} stage={stage} leads={stageLeads} total={total} />
+            );
+          })}
+        </div>
       </div>
 
       <DragOverlay>

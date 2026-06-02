@@ -58,8 +58,57 @@ export class EvolutionProvider implements WhatsAppProvider {
     const fromPhone = remote.split("@")[0]?.replace(/\D/g, "") ?? "";
     if (!fromPhone) return [];
     const fromMe = Boolean(p.data.key?.fromMe);
-    const body = p.data.message?.conversation ?? p.data.message?.extendedTextMessage?.text;
-    if (!body?.trim()) return [];
+
+    // Tentar pegar o texto da conversa
+    let body = p.data.message?.conversation ?? p.data.message?.extendedTextMessage?.text;
+    let mediaType: string | undefined = undefined;
+    let mediaUrl: string | undefined = undefined;
+
+    // Se não houver texto, validar se é uma mensagem de mídia (como áudio) para não descartá-la
+    if (!body?.trim()) {
+      const msgObj = p.data.message as any;
+      if (msgObj?.audioMessage) {
+        body = "🎤 Áudio";
+        mediaType = "audio";
+        mediaUrl = msgObj.audioMessage.url || msgObj.audioMessage.directPath || undefined;
+      } else if (msgObj?.imageMessage) {
+        body = "📷 Imagem";
+        mediaType = "image";
+        mediaUrl = msgObj.imageMessage.url || msgObj.imageMessage.directPath || undefined;
+      } else if (msgObj?.videoMessage) {
+        body = "🎬 Vídeo";
+        mediaType = "video";
+        mediaUrl = msgObj.videoMessage.url || msgObj.videoMessage.directPath || undefined;
+      } else if (msgObj?.documentMessage) {
+        body = "📎 Documento";
+        mediaType = "document";
+        mediaUrl = msgObj.documentMessage.url || msgObj.documentMessage.directPath || undefined;
+      } else if (msgObj?.stickerMessage) {
+        body = "🎭 Figurinha";
+        mediaType = "sticker";
+        mediaUrl = msgObj.stickerMessage.url || msgObj.stickerMessage.directPath || undefined;
+      } else {
+        // Sem texto e sem mídia identificável (ex: eventos de ruído, reações, etc), ignorar
+        return [];
+      }
+    }
+
+    const messageObj = p.data.message as any;
+    let normalizedReferral = null;
+    const rawReferral = messageObj?.referral ?? messageObj?.extendedTextMessage?.contextInfo?.externalAdReply;
+    if (rawReferral && (rawReferral.sourceId || rawReferral.source_id)) {
+      normalizedReferral = {
+        sourceId: String(rawReferral.sourceId ?? rawReferral.source_id),
+        sourceType: String(rawReferral.sourceType ?? rawReferral.source_type ?? "ad"),
+        sourceUrl: rawReferral.sourceUrl ?? rawReferral.source_url ?? undefined,
+        headline: rawReferral.headline ?? undefined,
+        body: rawReferral.body ?? undefined,
+        mediaType: rawReferral.mediaType ?? rawReferral.media_type ?? undefined,
+        imageUrl: rawReferral.imageUrl ?? rawReferral.image_url ?? undefined,
+        videoUrl: rawReferral.videoUrl ?? rawReferral.video_url ?? undefined,
+      };
+    }
+
     return [
       {
         externalId: p.data.key?.id ?? "",
@@ -67,10 +116,13 @@ export class EvolutionProvider implements WhatsAppProvider {
         toPhone: "",
         direction: fromMe ? "outbound" : "inbound",
         body: body.trim(),
+        mediaType,
+        mediaUrl,
         timestamp: p.data.messageTimestamp
           ? new Date(p.data.messageTimestamp * 1000).toISOString()
           : new Date().toISOString(),
         contactName: p.data.pushName,
+        referral: normalizedReferral,
       },
     ];
   }

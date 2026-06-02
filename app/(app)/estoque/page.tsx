@@ -16,6 +16,15 @@ export default async function EstoquePage() {
     .select("*")
     .eq("tenant_id", ctx.tenantId)
     .order("created_at", { ascending: false });
+  const { data: reservations } = await supabase
+    .from("stock_reservations")
+    .select("product_id, quantity")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("status", "active");
+  const reservedByProduct = new Map<string, number>();
+  for (const reservation of reservations ?? []) {
+    reservedByProduct.set(reservation.product_id, (reservedByProduct.get(reservation.product_id) ?? 0) + reservation.quantity);
+  }
 
   return (
     <div>
@@ -32,9 +41,9 @@ export default async function EstoquePage() {
             <thead className="border-b border-border/70 bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-5 py-3 font-medium">Produto</th>
-                <th className="px-5 py-3 font-medium">SKU</th>
+                <th className="px-5 py-3 font-medium">Detalhes</th>
                 <th className="px-5 py-3 font-medium">Preco</th>
-                <th className="px-5 py-3 font-medium">Estoque</th>
+                <th className="px-5 py-3 font-medium">Disponivel</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3" />
               </tr>
@@ -49,7 +58,9 @@ export default async function EstoquePage() {
                 </tr>
               )}
               {products?.map((p) => {
-                const low = p.stock_quantity <= p.min_stock;
+                const reserved = reservedByProduct.get(p.id) ?? 0;
+                const available = p.stock_quantity - reserved;
+                const low = available <= p.min_stock;
                 return (
                   <tr key={p.id} className="group transition-colors hover:bg-muted/40">
                     <td className="px-5 py-3 font-medium">
@@ -57,17 +68,18 @@ export default async function EstoquePage() {
                         {p.name}
                       </Link>
                     </td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{p.sku ?? "-"}</td>
+                    <td className="px-5 py-3 text-xs text-muted-foreground">{[p.tone, p.length_cm ? `${p.length_cm} cm` : null, p.texture].filter(Boolean).join(" · ") || p.sku || "-"}</td>
                     <td className="px-5 py-3 font-medium">{formatCurrencyBRL(p.price_cents)}</td>
                     <td className="px-5 py-3">
                       <span className={low ? "font-semibold text-destructive" : "font-medium"}>
-                        {p.stock_quantity}
+                        {available}
                       </span>
                       {low && (
                         <span className="ml-2 inline-flex items-center gap-1 text-xs text-destructive">
                           <AlertTriangle className="h-3 w-3" /> baixo
                         </span>
                       )}
+                      {reserved > 0 && <span className="ml-2 text-xs text-muted-foreground">{reserved} reservado(s)</span>}
                     </td>
                     <td className="px-5 py-3">
                       <Badge variant={p.is_active ? "success" : "outline"}>

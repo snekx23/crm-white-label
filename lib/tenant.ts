@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { createClient } from "./supabase/server";
 import type { Tenant, MemberRole } from "./supabase/database.types";
 
 export interface CurrentContext {
   userId: string;
+  userEmail: string;
   tenantId: string;
   tenant: Tenant;
   role: MemberRole;
@@ -11,7 +13,7 @@ export interface CurrentContext {
 
 const TENANT_COOKIE = "avante_tenant_id";
 
-export async function getCurrentContext(): Promise<CurrentContext | null> {
+export const getCurrentContext = cache(async (): Promise<CurrentContext | null> => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -32,11 +34,12 @@ export async function getCurrentContext(): Promise<CurrentContext | null> {
   const tenant = (chosen as unknown as { tenants: Tenant }).tenants;
   return {
     userId: user.id,
+    userEmail: user.email ?? "",
     tenantId: chosen.tenant_id,
     tenant,
     role: chosen.role as MemberRole,
   };
-}
+});
 
 export async function requireContext(): Promise<CurrentContext> {
   const ctx = await getCurrentContext();

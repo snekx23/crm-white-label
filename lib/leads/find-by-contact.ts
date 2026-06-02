@@ -4,7 +4,7 @@ import { findLeadByPhone } from "./find-by-phone";
 
 type SB = SupabaseClient<Database>;
 
-export type LeadContactMatch = { id: string; phone: string | null; whatsapp_lid: string | null };
+export type LeadContactMatch = { id: string; phone: string | null; whatsapp_lid: string | null; custom_fields?: any };
 
 export async function findLeadByContact(
   supabase: SB,
@@ -16,7 +16,7 @@ export async function findLeadByContact(
     if (byPhone) {
       const { data: row } = await supabase
         .from("leads")
-        .select("id, phone, whatsapp_lid")
+        .select("id, phone, whatsapp_lid, custom_fields")
         .eq("id", byPhone.id)
         .eq("tenant_id", tenantId)
         .single();
@@ -27,7 +27,7 @@ export async function findLeadByContact(
   if (contact.lid) {
     const { data } = await supabase
       .from("leads")
-      .select("id, phone, whatsapp_lid")
+      .select("id, phone, whatsapp_lid, custom_fields")
       .eq("tenant_id", tenantId)
       .eq("whatsapp_lid", contact.lid)
       .maybeSingle();

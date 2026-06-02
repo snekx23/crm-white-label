@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyBRL } from "@/lib/utils";
 import { MovementForm } from "./movement-form";
+import { ReservationForm } from "./reservation-form";
+import { availableStock } from "@/lib/estoque/reservations";
+import { consumeReservation, releaseReservation } from "../actions";
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,12 +24,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     .single();
   if (!product) notFound();
 
-  const { data: movements } = await supabase
-    .from("stock_movements")
-    .select("*")
-    .eq("product_id", id)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const [{ data: movements }, { data: reservations }, { data: leads }, { data: appointments }] = await Promise.all([
+    supabase.from("stock_movements").select("*").eq("product_id", id).order("created_at", { ascending: false }).limit(50),
+    supabase.from("stock_reservations").select("id, product_id, quantity, status, leads(name), appointments(starts_at)").eq("product_id", id).order("created_at", { ascending: false }),
+    supabase.from("leads").select("id, name").eq("tenant_id", ctx.tenantId).order("name"),
+    supabase.from("appointments").select("id, starts_at").eq("tenant_id", ctx.tenantId).order("starts_at", { ascending: false }).limit(50),
+  ]);
+  const available = availableStock(product.stock_quantity, reservations ?? []);
+  const reserved = product.stock_quantity - available;
 
   return (
     <div className="p-6">
@@ -37,7 +42,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       <header className="mb-6">
         <h1 className="text-2xl font-bold">{product.name}</h1>
         <p className="text-sm text-muted-foreground">
-          SKU: {product.sku ?? "-"} - {formatCurrencyBRL(product.price_cents)}
+          SKU: {product.sku ?? "-"} - {formatCurrencyBRL(product.price_cents)} · {product.tone ?? "Sem tonalidade"} · {product.length_cm ? `${product.length_cm} cm` : "Sem comprimento"} · {product.texture ?? "Sem textura"}
         </p>
       </header>
 
@@ -45,8 +50,34 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <Card>
           <CardHeader><CardTitle>Estoque atual</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold">{product.stock_quantity}</p>
-            <p className="text-xs text-muted-foreground">minimo: {product.min_stock}</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div><p className="text-2xl font-bold">{product.stock_quantity}</p><p className="text-xs text-muted-foreground">fisico</p></div>
+              <div><p className="text-2xl font-bold">{reserved}</p><p className="text-xs text-muted-foreground">reservado</p></div>
+              <div><p className="text-2xl font-bold">{available}</p><p className="text-xs text-muted-foreground">disponivel</p></div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">minimo: {product.min_stock}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <CardHeader><CardTitle>Reservas</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <ReservationForm productId={product.id} leads={leads ?? []} appointments={appointments ?? []} />
+            <div className="divide-y divide-border/70">
+              {(reservations ?? []).length === 0 && <p className="py-3 text-sm text-muted-foreground">Sem reservas ainda.</p>}
+              {(reservations ?? []).map((reservation) => {
+                const lead = reservation.leads as unknown as { name: string } | null;
+                return (
+                  <div key={reservation.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                    <div><p className="font-medium">{reservation.quantity} unidade(s) · {lead?.name ?? "Sem cliente vinculada"}</p><p className="text-xs text-muted-foreground">{reservation.status}</p></div>
+                    {reservation.status === "active" && <div className="flex gap-2">
+                      <form action={releaseReservation}><input type="hidden" name="id" value={reservation.id} /><input type="hidden" name="product_id" value={product.id} /><Button variant="outline" size="sm">Liberar</Button></form>
+                      <form action={consumeReservation}><input type="hidden" name="id" value={reservation.id} /><Button size="sm">Consumir</Button></form>
+                    </div>}
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 

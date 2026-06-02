@@ -86,25 +86,68 @@ export async function previewDisparoAudience(input: {
   const supabase = await createClient();
   const sources = input.sources?.filter(Boolean) ?? [];
 
-  const { data: leads, error } = await buildLeadsQuery(
-    supabase,
-    ctx.tenantId,
-    input.stage_ids,
-    sources,
-  );
-  if (error) throw new Error(error.message);
+  // 1. Query para contagem total (HEAD rápida, não baixa linhas)
+  let totalQuery = supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", ctx.tenantId);
+  if (input.stage_ids.length > 0) totalQuery = totalQuery.in("stage_id", input.stage_ids);
+  if (sources.length > 0) totalQuery = totalQuery.in("source", sources);
 
-  const rows = leads ?? [];
-  const eligible = filterEligible(rows);
+  // 2. Query para contagem de qualificados com telefone (HEAD rápida)
+  let phoneQuery = supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", ctx.tenantId)
+    .not("phone", "is", null)
+    .neq("phone", "");
+  if (input.stage_ids.length > 0) phoneQuery = phoneQuery.in("stage_id", input.stage_ids);
+  if (sources.length > 0) phoneQuery = phoneQuery.in("source", sources);
+
+  // 3. Query para amostra (máx 5 leads rápidos)
+  let sampleQuery = supabase
+    .from("leads")
+    .select("id, name, phone, source")
+    .eq("tenant_id", ctx.tenantId)
+    .not("phone", "is", null)
+    .neq("phone", "")
+    .limit(5);
+  if (input.stage_ids.length > 0) sampleQuery = sampleQuery.in("stage_id", input.stage_ids);
+  if (sources.length > 0) sampleQuery = sampleQuery.in("source", sources);
+
+  // 4. Query para buscar apenas a coluna de origem (economiza banda)
+  let sourcesQuery = supabase
+    .from("leads")
+    .select("source")
+    .eq("tenant_id", ctx.tenantId)
+    .not("source", "is", null)
+    .neq("source", "");
+  if (input.stage_ids.length > 0) sourcesQuery = sourcesQuery.in("stage_id", input.stage_ids);
+
+  // Executar todas em paralelo com alta velocidade!
+  const [totalRes, phoneRes, sampleRes, sourcesRes] = await Promise.all([
+    totalQuery,
+    phoneQuery,
+    sampleQuery,
+    sourcesQuery,
+  ]);
+
+  if (totalRes.error) throw new Error(totalRes.error.message);
+  if (phoneRes.error) throw new Error(phoneRes.error.message);
+  if (sampleRes.error) throw new Error(sampleRes.error.message);
+  if (sourcesRes.error) throw new Error(sourcesRes.error.message);
+
   const sourceSet = new Set<string>();
-  for (const l of rows) {
-    if (l.source?.trim()) sourceSet.add(l.source.trim());
+  for (const item of sourcesRes.data ?? []) {
+    if (item.source?.trim()) sourceSet.add(item.source.trim());
   }
 
+  const eligibleSample = filterEligible(sampleRes.data ?? []);
+
   return {
-    total: rows.length,
-    withPhone: eligible.length,
-    sample: eligible.slice(0, 5).map((l) => ({
+    total: totalRes.count ?? 0,
+    withPhone: phoneRes.count ?? 0,
+    sample: eligibleSample.map((l) => ({
       id: l.id,
       name: l.name,
       phone: l.phone ?? "",

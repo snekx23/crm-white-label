@@ -11,6 +11,8 @@ import { formatPhoneBR, formatCurrencyBRL, initials } from "@/lib/utils";
 import { LeadStageSelect } from "./lead-stage-select";
 import { LeadFilesPanel } from "./lead-files-panel";
 import { LeadDeleteButton } from "@/components/leads/lead-delete-button";
+import { TechnicalProfilePanel } from "./technical-profile-panel";
+import { TaskPanel } from "./task-panel";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,7 +28,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   if (!lead) notFound();
 
-  const [{ data: stages }, { data: files }, { data: activities }] = await Promise.all([
+  const [{ data: stages }, { data: files }, { data: activities }, { data: technicalDefinitions }, { data: tasks }] = await Promise.all([
     supabase
       .from("pipeline_stages")
       .select("id, name, color")
@@ -43,6 +45,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .eq("lead_id", lead.id)
       .order("created_at", { ascending: false })
       .limit(50),
+    supabase
+      .from("custom_field_definitions")
+      .select("id, key, label, field_type, options, is_required")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("entity_type", "lead")
+      .order("sort_order"),
+    supabase
+      .from("tasks")
+      .select("id, title, notes, due_at, status, assigned_to")
+      .eq("lead_id", lead.id)
+      .eq("tenant_id", ctx.tenantId)
+      .order("created_at", { ascending: false }),
   ]);
 
   return (
@@ -121,7 +135,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </CardContent>
           </Card>
 
+          <TechnicalProfilePanel
+            leadId={lead.id}
+            definitions={technicalDefinitions ?? []}
+            initialValues={(lead.custom_fields ?? {}) as Record<string, unknown>}
+          />
+
           <LeadFilesPanel leadId={lead.id} files={files ?? []} />
+          <TaskPanel leadId={lead.id} tasks={tasks ?? []} currentUserId={ctx.userId} />
         </div>
 
         <Card>

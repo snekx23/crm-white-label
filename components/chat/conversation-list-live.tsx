@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { fetchConversationItems } from "@/lib/chat/client";
-import type { ConversationListItem } from "@/lib/chat/types";
+import { fetchConversationItems, fetchWhatsAppGroupItems } from "@/lib/chat/client";
+import type { ConversationListItem, WhatsAppGroupListItem } from "@/lib/chat/types";
 import { ConversationList } from "@/app/(app)/chat/conversation-list";
 
 /** Fallback se realtime falhar; intervalo longo para não travar a UI. */
@@ -12,17 +12,24 @@ const POLL_MS = 12_000;
 export function ConversationListLive({
   tenantId,
   initialItems,
+  initialGroups,
 }: {
   tenantId: string;
   initialItems: ConversationListItem[];
+  initialGroups: WhatsAppGroupListItem[];
 }) {
   const [items, setItems] = useState(initialItems);
+  const [groups, setGroups] = useState(initialGroups);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const next = await fetchConversationItems(tenantId);
+      const [next, nextGroups] = await Promise.all([
+        fetchConversationItems(tenantId),
+        fetchWhatsAppGroupItems(tenantId),
+      ]);
       setItems(next);
+      setGroups(nextGroups);
     } catch {
       /* mantém lista anterior */
     }
@@ -35,7 +42,8 @@ export function ConversationListLive({
 
   useEffect(() => {
     setItems(initialItems);
-  }, [initialItems]);
+    setGroups(initialGroups);
+  }, [initialItems, initialGroups]);
 
   useEffect(() => {
     const timer = setInterval(() => void refresh(), POLL_MS);
@@ -66,6 +74,26 @@ export function ConversationListLive({
         },
         () => scheduleRefresh(),
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "whatsapp_groups",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () => scheduleRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "whatsapp_group_label_assignments",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () => scheduleRefresh(),
+      )
       .subscribe();
 
     return () => {
@@ -74,5 +102,5 @@ export function ConversationListLive({
     };
   }, [tenantId, scheduleRefresh]);
 
-  return <ConversationList items={items} />;
+  return <ConversationList items={items} groups={groups} />;
 }

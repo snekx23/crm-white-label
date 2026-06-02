@@ -52,3 +52,24 @@ export async function removeTenantLogo() {
   await supabase.from("tenants").update({ logo_url: null }).eq("id", ctx.tenantId);
   revalidatePath("/", "layout");
 }
+
+export async function updateTenantMetaSettings(input: {
+  meta_pixel_id?: string;
+  meta_capi_token?: string;
+  meta_ad_account_id?: string;
+}) {
+  const ctx = await requireContext();
+  if (!["owner", "admin"].includes(ctx.role)) throw new Error("Sem permissao");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tenants")
+    .update({
+      meta_pixel_id: input.meta_pixel_id?.trim() || null,
+      meta_capi_token: input.meta_capi_token?.trim() || null,
+      meta_ad_account_id: input.meta_ad_account_id?.trim() || null,
+    })
+    .eq("id", ctx.tenantId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/integrations");
+  revalidatePath("/integrations/facebook");
+}

@@ -26,10 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!ctx) redirect("/login");
 
   const supabase = await createClient();
-  const [{ data: profile }, { data: { user } }] = await Promise.all([
-    supabase.from("profiles").select("full_name").eq("id", ctx.userId).single(),
-    supabase.auth.getUser(),
-  ]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", ctx.userId)
+    .single();
 
   return (
     <>
@@ -41,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           tenantLogoUrl={ctx.tenant.logo_url}
           tenantTagline={ctx.tenant.tagline}
           userName={profile?.full_name ?? "Usuario"}
-          userEmail={user?.email ?? ""}
+          userEmail={ctx.userEmail}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />

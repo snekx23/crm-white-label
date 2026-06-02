@@ -1,26 +1,18 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/app/page-header";
+import { requireContext } from "@/lib/tenant";
+import { createClient } from "@/lib/supabase/server";
+import { FacebookForm } from "./facebook-form";
 
-export default function FacebookIntegrationPage() {
+export default async function FacebookIntegrationPage() {
+  const ctx = await requireContext();
+  const supabase = await createClient();
+
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("meta_pixel_id, meta_capi_token, meta_ad_account_id")
+    .eq("id", ctx.tenantId)
+    .single();
+
   return (
-    <div>
-      <PageHeader eyebrow="Integracao" title="Facebook Lead Ads" backHref="/integrations" description="Receba leads de campanhas Lead Ads automaticamente." />
-      <div className="p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Em breve</CardTitle>
-            <CardDescription>
-              Estamos finalizando a aprovacao do app na Meta. Enquanto isso, voce pode usar Zapier ou n8n
-              para encaminhar Lead Ads para o Webhook de captura na aba Formularios.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Em ambos casos, mapeie os campos <code>name</code>, <code>email</code> e <code>phone</code>.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <FacebookForm initialData={tenant || {}} />
   );
 }

@@ -12,6 +12,8 @@ import {
   Settings,
   LogOut,
   Plug,
+  GitBranch,
+  CalendarDays,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -23,12 +25,14 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/kanban", label: "Kanban", icon: KanbanSquare },
+  { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/disparos", label: "Disparos", icon: Send },
   { href: "/chat", label: "Conversas", icon: MessageCircle },
   { href: "/estoque", label: "Estoque", icon: Boxes },
 ];
 
 const secondaryItems = [
+  { href: "/pipelines", label: "Funis", icon: GitBranch },
   { href: "/integrations", label: "Integracoes", icon: Plug },
   { href: "/settings", label: "Configuracoes", icon: Settings },
 ];

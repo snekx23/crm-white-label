@@ -11,6 +11,13 @@ export type LeadsDashboardData = {
     wonToday: number;
     pipelineValueTodayCents: number;
   };
+  operations: {
+    sharedQueueLeads: number;
+    appointmentsToday: number;
+    overdueTasks: number;
+    lowStockProducts: number;
+    activeReservations: number;
+  };
   leadsByHour: { hour: string; count: number }[];
   pipelineByStage: { id: string; name: string; color: string; count: number; isWon: boolean; isLost: boolean }[];
   sourcesToday: { source: string; count: number }[];

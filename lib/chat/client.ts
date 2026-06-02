@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import { buildConversationItems } from "@/lib/chat/build-conversation-items";
 import type { ConversationLeadRow } from "@/lib/chat/conversation-filter";
 import type { WhatsAppAccount } from "@/lib/supabase/database.types";
-import type { ChatMessage, ConversationListItem } from "./types";
+import type { ChatMessage, ConversationListItem, WhatsAppGroupListItem } from "./types";
 
 export async function fetchMessages(conversationId: string): Promise<ChatMessage[]> {
   const supabase = createClient();
@@ -51,4 +51,12 @@ export async function fetchConversationItems(tenantId: string): Promise<Conversa
   }
 
   return buildConversationItems(rows, messagePreviews, (waAccount as WhatsAppAccount | null) ?? null);
+}
+
+export async function fetchWhatsAppGroupItems(tenantId: string): Promise<WhatsAppGroupListItem[]> {
+  void tenantId;
+  const res = await fetch("/api/chat/groups", { cache: "no-store" });
+  const data = (await res.json()) as { groups?: WhatsAppGroupListItem[]; error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Falha ao carregar grupos");
+  return data.groups ?? [];
 }

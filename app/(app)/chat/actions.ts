@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
 import { createProvider } from "@/lib/whatsapp/factory";
 import { normalizeWhatsAppPhone } from "@/lib/whatsapp/phone";
 import type { WhatsAppAccount } from "@/lib/supabase/database.types";
 import type { ChatMessage } from "@/lib/chat/types";
+
+const LABEL_COLORS = ["#7c3aed", "#2563eb", "#059669", "#dc2626", "#d97706", "#0891b2"];
 
 function providerErrorMessage(result: { status: string; raw?: unknown }): string {
   if (result.raw && typeof result.raw === "object") {
@@ -150,4 +152,180 @@ export async function markConversationRead(conversationId: string) {
     .update({ unread_count: 0 })
     .eq("id", conversationId)
     .eq("tenant_id", ctx.tenantId);
+}
+
+export async function addGroupLabel(input: { groupId: string; name: string }) {
+  const ctx = await requireContext();
+  const supabase = createServiceClient();
+  const name = input.name.trim().slice(0, 32);
+  if (!name) throw new Error("Informe o nome da label");
+
+  const { data: group } = await supabase
+    .from("whatsapp_groups")
+    .select("id")
+    .eq("id", input.groupId)
+    .eq("tenant_id", ctx.tenantId)
+    .single();
+  if (!group) throw new Error("Grupo nao encontrado");
+
+  const { data: existing } = await supabase
+    .from("whatsapp_group_labels")
+    .select("id")
+    .eq("tenant_id", ctx.tenantId)
+    .ilike("name", name)
+    .maybeSingle();
+
+  let labelId = existing?.id as string | undefined;
+  if (!labelId) {
+    const color = LABEL_COLORS[Math.abs(name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0)) % LABEL_COLORS.length];
+    const { data: created, error } = await supabase
+      .from("whatsapp_group_labels")
+      .insert({ tenant_id: ctx.tenantId, name, color })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    labelId = created?.id;
+  }
+
+  if (!labelId) throw new Error("Falha ao criar label");
+
+  const { error } = await supabase
+    .from("whatsapp_group_label_assignments")
+    .upsert(
+      { tenant_id: ctx.tenantId, group_id: input.groupId, label_id: labelId },
+      { onConflict: "group_id,label_id" },
+    );
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/chat");
+}
+
+export async function removeGroupLabel(input: { groupId: string; labelId: string }) {
+  const ctx = await requireContext();
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("whatsapp_group_label_assignments")
+    .delete()
+    .eq("tenant_id", ctx.tenantId)
+    .eq("group_id", input.groupId)
+    .eq("label_id", input.labelId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/chat");
+}
+
+function evolutionErrorMessage(raw: unknown): string {
+  if (raw && typeof raw === "object") {
+    const data = raw as Record<string, unknown>;
+    if (typeof data.message === "string") return data.message;
+    if (typeof data.error === "string") return data.error;
+    const response = data.response;
+    if (response && typeof response === "object") {
+      const message = (response as Record<string, unknown>).message;
+      if (Array.isArray(message)) return message.join(", ");
+      if (typeof message === "string") return message;
+    }
+  }
+  return "Falha ao enviar mensagem no grupo";
+}
+
+async function sendEvolutionGroupText(account: WhatsAppAccount, groupJid: string, body: string) {
+  const credentials = account.credentials as { base_url?: string; api_key?: string; instance?: string };
+  const baseUrl = credentials.base_url?.replace(/\/$/, "");
+  const apiKey = credentials.api_key;
+  const instance = credentials.instance;
+  if (!baseUrl || !apiKey || !instance) throw new Error("Credenciais Evolution incompletas");
+
+  const url = `${baseUrl}/message/sendText/${encodeURIComponent(instance)}`;
+  const attempts = [
+    { number: groupJid, text: body, linkPreview: true },
+    { groupJid, text: body, linkPreview: true },
+  ];
+
+  let lastRaw: unknown = null;
+  for (const payload of attempts) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { apikey: apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let raw: unknown = text;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      /* keep raw text */
+    }
+    lastRaw = raw;
+    if (res.ok) return raw as { key?: { id?: string; remoteJid?: string }; messageTimestamp?: string | number };
+  }
+
+  throw new Error(evolutionErrorMessage(lastRaw));
+}
+
+export async function sendGroupMessage(input: { groupId: string; body: string }) {
+  const ctx = await requireContext();
+  const supabase = createServiceClient();
+  const body = input.body.trim();
+  if (!body) throw new Error("Digite uma mensagem");
+
+  const { data: group } = await supabase
+    .from("whatsapp_groups")
+    .select("id, tenant_id, whatsapp_account_id, provider_group_id")
+    .eq("id", input.groupId)
+    .eq("tenant_id", ctx.tenantId)
+    .single();
+  if (!group) throw new Error("Grupo nao encontrado");
+
+  const { data: account } = await supabase
+    .from("whatsapp_accounts")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("provider", "evolution")
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+  if (!account) throw new Error("Conta Evolution nao configurada");
+
+  const raw = await sendEvolutionGroupText(account as WhatsAppAccount, group.provider_group_id, body);
+  const externalId = raw.key?.id ?? `group-out-${Date.now()}`;
+  const messageAt = raw.messageTimestamp
+    ? new Date(Number(raw.messageTimestamp) * 1000).toISOString()
+    : new Date().toISOString();
+
+  const { data: inserted, error } = await supabase
+    .from("whatsapp_webhook_logs")
+    .insert({
+      tenant_id: ctx.tenantId,
+      whatsapp_account_id: account.id,
+      event_type: "GROUP_MESSAGE",
+      from_me: true,
+      contact_lid: group.provider_group_id,
+      parsed_count: 1,
+      payload: {
+        external_id: externalId,
+        provider_group_id: group.provider_group_id,
+        sender_jid: account.phone_number,
+        sender_name: account.display_name ?? "Voce",
+        direction: "outbound",
+        body,
+        message_at: messageAt,
+        raw_payload: raw,
+      },
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/chat/groups/${input.groupId}`);
+  revalidatePath("/chat");
+
+  return {
+    id: inserted?.id ?? externalId,
+    direction: "outbound" as const,
+    body,
+    senderName: account.display_name ?? "Voce",
+    senderJid: account.phone_number,
+    createdAt: messageAt,
+    externalId,
+  };
 }

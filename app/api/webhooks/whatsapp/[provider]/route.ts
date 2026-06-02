@@ -154,6 +154,61 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     }
   }
 
+  if (provider === "evolution") {
+    const groupMessages = parseEvolutionGroupMessages(payload);
+    if (groupMessages.length > 0) {
+      const { error } = await supabase.from("whatsapp_webhook_logs").insert(
+        groupMessages.map((message) => ({
+          tenant_id: account.tenant_id,
+          whatsapp_account_id: account.id,
+          event_type: "GROUP_MESSAGE",
+          from_me: message.direction === "outbound",
+          contact_lid: message.provider_group_id,
+          parsed_count: 1,
+          payload: {
+            external_id: message.external_id,
+            provider_group_id: message.provider_group_id,
+            sender_jid: message.sender_jid,
+            sender_name: message.sender_name,
+            direction: message.direction,
+            body: message.body,
+            message_at: message.message_at,
+            raw_payload: message.raw_payload,
+          },
+        })),
+      );
+
+      if (error) {
+        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, parsed: groupMessages.length, kind: "group_messages" });
+    }
+
+    const groups = parseEvolutionGroupEvents(payload);
+    if (groups.length > 0) {
+      const { error } = await supabase.from("whatsapp_groups").upsert(
+        groups.map((group) => ({
+          tenant_id: account.tenant_id,
+          whatsapp_account_id: account.id,
+          provider_group_id: group.provider_group_id,
+          subject: group.subject,
+          description: group.description,
+          owner_jid: group.owner_jid,
+          participant_count: group.participant_count,
+          last_event_type: group.last_event_type,
+          last_event_at: group.last_event_at,
+          raw_payload: group.raw_payload,
+        })),
+        { onConflict: "tenant_id,provider_group_id" },
+      );
+
+      if (error) {
+        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, parsed: groups.length, kind: "groups" });
+    }
+  }
+
   const adapter = createProvider(account);
   const messages = adapter.parseWebhook(payload);
 
@@ -286,6 +341,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       stageId,
 
       pipelineId,
+
+      referral: msg.referral || null,
 
     });
 

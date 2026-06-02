@@ -57,6 +57,18 @@ export function NewProductDialog() {
               <Label htmlFor="min_stock">Estoque minimo</Label>
               <Input id="min_stock" name="min_stock" type="number" min="0" defaultValue={0} />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tone">Tonalidade</Label>
+              <Input id="tone" name="tone" placeholder="Ex.: castanho medio" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="length_cm">Comprimento (cm)</Label>
+              <Input id="length_cm" name="length_cm" type="number" min="1" />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label htmlFor="texture">Textura</Label>
+              <Input id="texture" name="texture" placeholder="Ex.: liso, ondulado" />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="description">Descricao</Label>

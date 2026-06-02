@@ -14,6 +14,16 @@ export async function findOrCreateWhatsAppLead(
     name?: string | null;
     stageId?: string | null;
     pipelineId?: string | null;
+    referral?: {
+      sourceId: string;
+      sourceType: string;
+      sourceUrl?: string;
+      headline?: string;
+      body?: string;
+      mediaType?: string;
+      imageUrl?: string;
+      videoUrl?: string;
+    } | null;
   },
 ): Promise<string | null> {
   const existing = await findLeadByContact(supabase, tenantId, {
@@ -24,7 +34,32 @@ export async function findOrCreateWhatsAppLead(
     if (contact.lid) {
       await attachWhatsAppLidToLead(supabase, existing.id, tenantId, contact.lid);
     }
+    if (contact.referral) {
+      const currentFields = (existing as any).custom_fields || {};
+      if (!currentFields.meta_ad_id) {
+        await supabase
+          .from("leads")
+          .update({
+            custom_fields: {
+              ...currentFields,
+              meta_ad_id: contact.referral.sourceId,
+              meta_ad_type: contact.referral.sourceType,
+              ...(contact.referral.headline ? { meta_ad_headline: contact.referral.headline } : {}),
+              ...(contact.referral.body ? { meta_ad_body: contact.referral.body } : {}),
+            }
+          })
+          .eq("id", existing.id);
+      }
+    }
     return existing.id;
+  }
+
+  const customFields: Record<string, any> = {};
+  if (contact.referral) {
+    customFields.meta_ad_id = contact.referral.sourceId;
+    customFields.meta_ad_type = contact.referral.sourceType;
+    if (contact.referral.headline) customFields.meta_ad_headline = contact.referral.headline;
+    if (contact.referral.body) customFields.meta_ad_body = contact.referral.body;
   }
 
   const { data: created, error } = await supabase
@@ -37,6 +72,7 @@ export async function findOrCreateWhatsAppLead(
       source: "whatsapp",
       stage_id: contact.stageId ?? null,
       pipeline_id: contact.pipelineId ?? null,
+      custom_fields: customFields,
     })
     .select("id")
     .single();

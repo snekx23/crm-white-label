@@ -19,13 +19,15 @@ export default async function IntegrationsPage() {
   const ctx = await requireContext();
   const supabase = await createClient();
 
-  const [{ data: wppAccount }, { data: keys }] = await Promise.all([
+  const [{ data: wppAccount }, { data: keys }, { data: tenant }] = await Promise.all([
     supabase.from("whatsapp_accounts").select("id, is_active").eq("tenant_id", ctx.tenantId).maybeSingle(),
     supabase.from("lead_intake_keys").select("id, is_active").eq("tenant_id", ctx.tenantId),
+    supabase.from("tenants").select("meta_pixel_id").eq("id", ctx.tenantId).single(),
   ]);
 
   const wppOn = !!(wppAccount?.is_active);
   const formsOn = (keys ?? []).some((k) => k.is_active);
+  const metaOn = !!(tenant?.meta_pixel_id);
 
   const items = [
     {
@@ -58,13 +60,12 @@ export default async function IntegrationsPage() {
     },
     {
       key: "facebook",
-      title: "Facebook Lead Ads",
-      description: "Receba automaticamente leads de campanhas de anuncios da sua pagina do Facebook.",
+      title: "Meta Ads & Pixel (CAPI)",
+      description: "Configure o seu Pixel e API de Conversões do Meta para rastreamento inteligente de vendas e ROAS no WhatsApp.",
       icon: Facebook,
       href: "/integrations/facebook",
-      status: false,
-      tags: ["Lead Ads", "Webhook"],
-      soon: true,
+      status: metaOn,
+      tags: ["Pixel", "Conversions API", "ROAS"],
     },
     {
       key: "site",

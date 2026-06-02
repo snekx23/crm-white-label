@@ -1,9 +1,12 @@
 // Tipos minimos do schema. Execute `npm run supabase:types` para gerar tipos completos.
-export type MemberRole = "owner" | "admin" | "vendedor";
+export type MemberRole = "owner" | "admin" | "gerente" | "atendente" | "vendedor";
 export type WhatsAppProviderKind = "cloud_api" | "evolution" | "zapi";
 export type MessageDirection = "inbound" | "outbound";
 export type MessageStatus = "pending" | "sent" | "delivered" | "read" | "failed";
 export type StockMovementKind = "in" | "out" | "adjust";
+export type TaskStatus = "open" | "done" | "cancelled";
+export type AppointmentStatus = "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show";
+export type StockReservationStatus = "active" | "released" | "consumed";
 
 export type CampaignStatus = "draft" | "scheduled" | "running" | "completed" | "cancelled" | "failed";
 export type CampaignMessageMode = "template" | "text";
@@ -173,6 +176,37 @@ export interface WhatsAppAccount {
   created_at: string;
 }
 
+export interface WhatsAppGroup {
+  id: string;
+  tenant_id: string;
+  whatsapp_account_id: string | null;
+  provider_group_id: string;
+  subject: string;
+  description: string | null;
+  owner_jid: string | null;
+  participant_count: number | null;
+  last_event_type: string | null;
+  last_event_at: string | null;
+  raw_payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppGroupLabel {
+  id: string;
+  tenant_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export interface WhatsAppGroupLabelAssignment {
+  tenant_id: string;
+  group_id: string;
+  label_id: string;
+  created_at: string;
+}
+
 export interface Conversation {
   id: string;
   tenant_id: string;
@@ -221,6 +255,9 @@ export interface Product {
   cost_cents: number;
   stock_quantity: number;
   min_stock: number;
+  tone: string | null;
+  length_cm: number | null;
+  texture: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -238,6 +275,100 @@ export interface StockMovement {
   created_at: string;
 }
 
+export interface AttendantStatus {
+  tenant_id: string;
+  user_id: string;
+  is_available: boolean;
+  last_assigned_at: string | null;
+  updated_at: string;
+}
+
+export interface LeadAssignmentHistory {
+  id: string;
+  tenant_id: string;
+  lead_id: string;
+  from_user_id: string | null;
+  to_user_id: string | null;
+  assigned_by: string | null;
+  reason: string;
+  created_at: string;
+}
+
+export interface CustomFieldDefinition {
+  id: string;
+  tenant_id: string;
+  entity_type: "lead";
+  key: string;
+  label: string;
+  field_type: "text" | "number" | "date" | "select" | "boolean" | "file";
+  options: unknown[];
+  is_required: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface Task {
+  id: string;
+  tenant_id: string;
+  lead_id: string | null;
+  assigned_to: string | null;
+  created_by: string | null;
+  title: string;
+  notes: string | null;
+  due_at: string | null;
+  status: TaskStatus;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Professional {
+  id: string;
+  tenant_id: string;
+  name: string;
+  phone: string | null;
+  color: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Service {
+  id: string;
+  tenant_id: string;
+  name: string;
+  duration_minutes: number;
+  price_cents: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Appointment {
+  id: string;
+  tenant_id: string;
+  lead_id: string;
+  professional_id: string | null;
+  service_id: string | null;
+  starts_at: string;
+  duration_minutes: number;
+  status: AppointmentStatus;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockReservation {
+  id: string;
+  tenant_id: string;
+  product_id: string;
+  lead_id: string | null;
+  appointment_id: string | null;
+  quantity: number;
+  status: StockReservationStatus;
+  created_by: string | null;
+  created_at: string;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -249,11 +380,34 @@ export type Database = {
       leads: { Row: Lead; Insert: Partial<Lead>; Update: Partial<Lead> };
       lead_activities: { Row: LeadActivity; Insert: Partial<LeadActivity>; Update: Partial<LeadActivity> };
       whatsapp_accounts: { Row: WhatsAppAccount; Insert: Partial<WhatsAppAccount>; Update: Partial<WhatsAppAccount> };
+      whatsapp_groups: { Row: WhatsAppGroup; Insert: Partial<WhatsAppGroup>; Update: Partial<WhatsAppGroup> };
+      whatsapp_group_labels: { Row: WhatsAppGroupLabel; Insert: Partial<WhatsAppGroupLabel>; Update: Partial<WhatsAppGroupLabel> };
+      whatsapp_group_label_assignments: {
+        Row: WhatsAppGroupLabelAssignment;
+        Insert: Partial<WhatsAppGroupLabelAssignment>;
+        Update: Partial<WhatsAppGroupLabelAssignment>;
+      };
       conversations: { Row: Conversation; Insert: Partial<Conversation>; Update: Partial<Conversation> };
       messages: { Row: Message; Insert: Partial<Message>; Update: Partial<Message> };
       files: { Row: FileRow; Insert: Partial<FileRow>; Update: Partial<FileRow> };
       products: { Row: Product; Insert: Partial<Product>; Update: Partial<Product> };
       stock_movements: { Row: StockMovement; Insert: Partial<StockMovement>; Update: Partial<StockMovement> };
+      attendant_status: { Row: AttendantStatus; Insert: Partial<AttendantStatus>; Update: Partial<AttendantStatus> };
+      lead_assignment_history: {
+        Row: LeadAssignmentHistory;
+        Insert: Partial<LeadAssignmentHistory>;
+        Update: Partial<LeadAssignmentHistory>;
+      };
+      custom_field_definitions: {
+        Row: CustomFieldDefinition;
+        Insert: Partial<CustomFieldDefinition>;
+        Update: Partial<CustomFieldDefinition>;
+      };
+      tasks: { Row: Task; Insert: Partial<Task>; Update: Partial<Task> };
+      professionals: { Row: Professional; Insert: Partial<Professional>; Update: Partial<Professional> };
+      services: { Row: Service; Insert: Partial<Service>; Update: Partial<Service> };
+      appointments: { Row: Appointment; Insert: Partial<Appointment>; Update: Partial<Appointment> };
+      stock_reservations: { Row: StockReservation; Insert: Partial<StockReservation>; Update: Partial<StockReservation> };
       notifications: { Row: Notification; Insert: Partial<Notification>; Update: Partial<Notification> };
       lead_intake_keys: { Row: LeadIntakeKey; Insert: Partial<LeadIntakeKey>; Update: Partial<LeadIntakeKey> };
       message_templates: { Row: MessageTemplate; Insert: Partial<MessageTemplate>; Update: Partial<MessageTemplate> };

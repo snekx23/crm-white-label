@@ -37,6 +37,16 @@ export interface InboundNormalized {
   contactName?: string;
   /** Status de entrega/leitura (mensagens enviadas). */
   messageStatus?: "sent" | "delivered" | "read";
+  referral?: {
+    sourceId: string;
+    sourceType: string;
+    sourceUrl?: string;
+    headline?: string;
+    body?: string;
+    mediaType?: string;
+    imageUrl?: string;
+    videoUrl?: string;
+  } | null;
 }
 
 export interface WhatsAppProvider {

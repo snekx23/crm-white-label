@@ -7,6 +7,10 @@ import {
   Target,
   UserPlus,
   Users,
+  CalendarDays,
+  ClipboardList,
+  Boxes,
+  Inbox,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,9 +34,8 @@ export function LeadsOpsDashboard({ data }: { data: LeadsDashboardData }) {
 
   return (
     <div className="space-y-6 p-6 md:p-8">
-      <section className="relative overflow-hidden rounded-2xl border border-brand/25 bg-gradient-to-br from-brand/12 via-card to-card p-6 shadow-elev-2 md:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-brand/20 blur-3xl" />
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <section className="border-b border-brand/25 bg-card px-1 pb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-brand">
               <Sparkles className="h-3.5 w-3.5" />
@@ -53,6 +56,13 @@ export function LeadsOpsDashboard({ data }: { data: LeadsDashboardData }) {
           </div>
         </div>
       </section>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <OpsCard icon={<Inbox className="h-4 w-4" />} label="Fila compartilhada" value={data.operations.sharedQueueLeads} href="/leads" />
+        <OpsCard icon={<CalendarDays className="h-4 w-4" />} label="Horarios hoje" value={data.operations.appointmentsToday} href="/agenda" />
+        <OpsCard icon={<ClipboardList className="h-4 w-4" />} label="Tarefas atrasadas" value={data.operations.overdueTasks} href="/leads" alert={data.operations.overdueTasks > 0} />
+        <OpsCard icon={<Boxes className="h-4 w-4" />} label="Estoque baixo" value={data.operations.lowStockProducts} hint={`${data.operations.activeReservations} reserva(s) ativa(s)`} href="/estoque" alert={data.operations.lowStockProducts > 0} />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
@@ -233,6 +243,19 @@ export function LeadsOpsDashboard({ data }: { data: LeadsDashboardData }) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function OpsCard({ icon, label, value, hint, href, alert }: { icon: React.ReactNode; label: string; value: number; hint?: string; href: string; alert?: boolean }) {
+  return (
+    <Link href={href} className="flex items-center gap-3 border border-border/70 bg-card px-4 py-3 transition-colors hover:border-brand/40 hover:bg-brand/5">
+      <span className={cn("grid h-8 w-8 place-items-center rounded-md bg-muted text-muted-foreground", alert && "bg-destructive/10 text-destructive")}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+        {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{hint}</span>}
+      </span>
+      <strong className={cn("font-mono text-xl", alert && "text-destructive")}>{value}</strong>
+    </Link>
   );
 }
 
