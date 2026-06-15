@@ -24,13 +24,13 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Megas Perini CRM",
-    template: "%s · Megas Perini CRM",
+    default: "Solaire W+ CRM",
+    template: "%s · Solaire W+ CRM",
   },
   description:
-    "CRM interno da Megas Perini para atendimento, agenda, relacionamento e estoque.",
+    "Plataforma white-label de CRM para atendimento, vendas, agenda e automacoes.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
-  applicationName: "Megas Perini CRM",
+  applicationName: "Solaire W+ CRM",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -39,8 +39,8 @@ export const metadata: Metadata = {
     apple: "/apple-icon.svg",
   },
   openGraph: {
-    title: "Megas Perini CRM",
-    description: "CRM interno para a operacao Megas Perini.",
+    title: "Solaire W+ CRM",
+    description: "Plataforma white-label de CRM para atendimento, vendas, agenda e automacoes.",
     type: "website",
   },
 };

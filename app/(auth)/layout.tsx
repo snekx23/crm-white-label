@@ -1,49 +1,91 @@
 import { ThemeToggle } from "@/components/theme-toggle";
+import Link from "next/link";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="relative grid min-h-screen lg:grid-cols-[minmax(520px,0.86fr)_1.14fr]"
-      style={{ "--brand": "36 33% 48%", "--brand-foreground": "0 0% 100%" } as React.CSSProperties}
-    >
+    <div className="relative grid min-h-screen lg:grid-cols-[minmax(520px,0.86fr)_1.14fr]">
+      {/* Left: form */}
       <div className="flex flex-col">
-        <div className="flex items-center justify-end p-6">
+        <div className="flex items-center justify-between p-6">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-md bg-brand text-brand-foreground font-display text-sm font-bold">
+              S
+            </div>
+            <span className="font-display text-sm font-semibold">Solaire W+ CRM</span>
+          </Link>
           <ThemeToggle />
         </div>
+
         <div className="flex flex-1 items-center justify-center p-6">
           <div className="w-full max-w-sm">
-            <div className="mb-10 flex items-center gap-3 lg:hidden">
-              <div className="grid h-12 w-12 place-items-center rounded-md border border-brand/30 bg-brand/10 font-display text-sm font-semibold text-brand">
-                MP
-              </div>
-              <div>
-                <p className="font-display text-xl font-semibold">Megas Perini</p>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">CRM interno</p>
-              </div>
-            </div>
             {children}
           </div>
         </div>
+
         <div className="p-6 text-center text-xs text-muted-foreground">
-          © 2026 Megas Perini · CRM interno
+          © 2026 Solaire W+ CRM · Todos os direitos reservados
         </div>
       </div>
 
-      <div className="relative hidden overflow-hidden bg-[#f2eee8] lg:block">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/megas-perini-monogram.png" alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-black/10" />
+      {/* Right: hero panel */}
+      <div className="relative hidden overflow-hidden bg-[#0f1117] lg:flex lg:flex-col lg:justify-between lg:p-12">
+        {/* Grid pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              "linear-gradient(hsl(var(--brand)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--brand)) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+          }}
+        />
 
-        <div className="relative flex h-full flex-col justify-between p-12 text-[#211d19]">
-          <div>
-            <p className="font-display text-3xl font-semibold">Megas Perini</p>
-            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#675b4e]">CRM interno</p>
+        {/* Glow */}
+        <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-brand/20 blur-[100px]" />
+
+        <div className="relative">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-brand-foreground font-display text-base font-bold shadow-lg">
+              S
+            </div>
+            <div>
+              <p className="font-display text-lg font-semibold text-white">Solaire W+ CRM</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">Plataforma White-Label</p>
+            </div>
           </div>
-          <div className="max-w-xl border-l-2 border-[#9d7e52] pl-5">
-            <p className="font-display text-4xl font-medium leading-tight">Atendimento, agenda e relacionamento em um só lugar.</p>
-            <p className="mt-4 text-sm text-[#675b4e]">Operacao exclusiva da equipe Megas Perini.</p>
+        </div>
+
+        <div className="relative space-y-6">
+          <div className="space-y-3">
+            <p className="font-display text-4xl font-medium leading-tight text-white">
+              CRM completo para sua equipe vender mais e atender melhor.
+            </p>
+            <p className="text-sm text-white/50">
+              Leads, kanban, WhatsApp, Instagram, agenda, automacoes e muito mais — tudo em um so lugar.
+            </p>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#675b4e]">Referencia em Mega Hair</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Leads & Kanban", desc: "Funis configuráveis" },
+              { label: "WhatsApp & Instagram", desc: "Chat integrado" },
+              { label: "Automações", desc: "Editor visual" },
+              { label: "Multi-tenant", desc: "White-label" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm"
+              >
+                <p className="text-xs font-semibold text-white">{item.label}</p>
+                <p className="mt-0.5 text-[11px] text-white/40">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">
+            Solaire W+ · 2026
+          </p>
         </div>
       </div>
     </div>

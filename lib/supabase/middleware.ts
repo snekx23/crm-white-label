@@ -35,10 +35,13 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     isAuthRoute ||
     url.pathname.startsWith("/api/auth/signup") ||
+    url.pathname.startsWith("/api/auth/instagram") ||
     url.pathname.startsWith("/api/webhooks") ||
     url.pathname.startsWith("/api/intake") ||
     url.pathname.startsWith("/api/cron") ||
     url.pathname === "/" ||
+    url.pathname.startsWith("/privacy") ||
+    url.pathname.startsWith("/terms") ||
     url.pathname.startsWith("/_next") ||
     url.pathname.startsWith("/favicon");
 

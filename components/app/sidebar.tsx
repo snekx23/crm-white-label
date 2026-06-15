@@ -14,6 +14,7 @@ import {
   Plug,
   GitBranch,
   CalendarDays,
+  Zap,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/disparos", label: "Disparos", icon: Send },
   { href: "/chat", label: "Conversas", icon: MessageCircle },
   { href: "/estoque", label: "Estoque", icon: Boxes },
+  { href: "/automations", label: "Automacoes", icon: Zap },
 ];
 
 const secondaryItems = [

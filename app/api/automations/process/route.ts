@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { processExecution } from "@/lib/automations/execute";
+
+export const dynamic = "force-dynamic";
+
+// Called by Cloudflare Cron or manually to process pending automation steps
+export async function POST(req: NextRequest) {
+  // Simple bearer auth via CRON_SECRET env var
+  const auth = req.headers.get("authorization");
+  const secret = process.env.CRON_SECRET;
+  if (secret && auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createServiceClient();
+
+  // Resume waiting steps whose resume_at has passed
+  const { data: waitingSteps } = await supabase
+    .from("automation_execution_steps")
+    .select("id, execution_id, tenant_id")
+    .eq("status", "waiting")
+    .lte("resume_at", new Date().toISOString())
+    .limit(50);
+
+  for (const step of waitingSteps ?? []) {
+    // Mark as pending so execute() can pick it up
+    await supabase
+      .from("automation_execution_steps")
+      .update({ status: "pending" })
+      .eq("id", step.id);
+
+    // Re-run the execution
+    await processExecution(supabase, step.execution_id as string);
+  }
+
+  // Process newly queued executions (start step = pending)
+  const { data: pendingExecutions } = await supabase
+    .from("automation_executions")
+    .select("id")
+    .eq("status", "running")
+    .limit(50);
+
+  let processed = 0;
+  for (const exec of pendingExecutions ?? []) {
+    const hasPending = await supabase
+      .from("automation_execution_steps")
+      .select("id")
+      .eq("execution_id", exec.id)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+
+    if (hasPending.data) {
+      await processExecution(supabase, exec.id as string);
+      processed++;
+    }
+  }
+
+  return NextResponse.json({ ok: true, processed, resumed: waitingSteps?.length ?? 0 });
+}

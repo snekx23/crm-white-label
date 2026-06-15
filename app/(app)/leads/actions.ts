@@ -7,6 +7,7 @@ import { chooseRoundRobinAttendant } from "@/lib/leads/assignment";
 import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
 import { normalizePhone } from "@/lib/utils";
+import { fireAutomationTrigger } from "@/lib/automations/trigger";
 
 const leadSchema = z.object({
   name: z.string().min(1, "Nome obrigatorio"),
@@ -76,6 +77,9 @@ export async function createLead(formData: FormData) {
     } catch (assignmentError) {
       console.error("Erro ao distribuir lead automaticamente:", assignmentError);
     }
+    void fireAutomationTrigger(ctx.tenantId, "lead_created", createdLead.id, {
+      source: parsed.source,
+    });
   }
 
   revalidatePath("/leads");
@@ -160,7 +164,9 @@ export async function updateLead(id: string, patch: Partial<{
 }
 
 export async function moveLeadToStage(leadId: string, stageId: string, position: number) {
-  return updateLead(leadId, { stage_id: stageId, position });
+  const ctx = await requireContext();
+  await updateLead(leadId, { stage_id: stageId, position });
+  void fireAutomationTrigger(ctx.tenantId, "stage_changed", leadId, { stage_id: stageId });
 }
 
 export async function assignLead(input: {

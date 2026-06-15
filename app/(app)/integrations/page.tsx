@@ -19,15 +19,17 @@ export default async function IntegrationsPage() {
   const ctx = await requireContext();
   const supabase = await createClient();
 
-  const [{ data: wppAccount }, { data: keys }, { data: tenant }] = await Promise.all([
+  const [{ data: wppAccount }, { data: keys }, { data: tenant }, { data: igAccount }] = await Promise.all([
     supabase.from("whatsapp_accounts").select("id, is_active").eq("tenant_id", ctx.tenantId).maybeSingle(),
     supabase.from("lead_intake_keys").select("id, is_active").eq("tenant_id", ctx.tenantId),
     supabase.from("tenants").select("meta_pixel_id").eq("id", ctx.tenantId).single(),
+    supabase.from("instagram_accounts").select("id, is_active").eq("tenant_id", ctx.tenantId).maybeSingle(),
   ]);
 
   const wppOn = !!(wppAccount?.is_active);
   const formsOn = (keys ?? []).some((k) => k.is_active);
   const metaOn = !!(tenant?.meta_pixel_id);
+  const igOn = !!(igAccount?.is_active);
 
   const items = [
     {
@@ -51,12 +53,11 @@ export default async function IntegrationsPage() {
     {
       key: "instagram",
       title: "Instagram DM",
-      description: "Capture leads das DMs do Instagram via Meta Graph API (em breve - configuracao manual disponivel).",
+      description: "Capture leads das DMs do Instagram automaticamente via Meta Graph API.",
       icon: Instagram,
       href: "/integrations/instagram",
-      status: false,
+      status: igOn,
       tags: ["Meta", "Graph API"],
-      soon: true,
     },
     {
       key: "facebook",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -36,7 +37,7 @@ export default function LoginPage() {
     <div>
       <div className="mb-8 space-y-2">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Bem-vindo de volta</h1>
-        <p className="text-sm text-muted-foreground">Entre com sua conta para acessar o CRM da Megas Perini</p>
+        <p className="text-sm text-muted-foreground">Entre com sua conta para acessar o painel</p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-5">
@@ -70,7 +71,12 @@ export default function LoginPage() {
         <Button type="submit" variant="brand" size="lg" className="w-full" disabled={loading}>
           {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Entrando...</> : "Entrar"}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">Acesso restrito a equipe autorizada.</p>
+        <p className="text-center text-sm text-muted-foreground">
+          Nao tem conta?{" "}
+          <Link href="/signup" className="font-medium text-foreground hover:text-brand">
+            Criar conta gratis
+          </Link>
+        </p>
       </form>
     </div>
   );
