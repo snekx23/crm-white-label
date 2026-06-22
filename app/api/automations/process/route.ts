@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { processExecution } from "@/lib/automations/execute";
+import { processScheduledMessages } from "@/lib/chat/process-scheduled";
 
 export const dynamic = "force-dynamic";
 
@@ -57,5 +58,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, processed, resumed: waitingSteps?.length ?? 0 });
+  // Envia mensagens agendadas cujo horário já passou
+  const scheduledSent = await processScheduledMessages(supabase);
+
+  return NextResponse.json({
+    ok: true,
+    processed,
+    resumed: waitingSteps?.length ?? 0,
+    scheduledSent,
+  });
 }

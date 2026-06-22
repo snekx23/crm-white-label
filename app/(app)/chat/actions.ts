@@ -292,6 +292,70 @@ export async function sendChatMedia(input: {
   }
 }
 
+export async function scheduleChatMessage(input: {
+  leadId: string;
+  body: string;
+  sendAt: string; // ISO
+}): Promise<{ id: string }> {
+  const ctx = await requireContext();
+  const supabase = await createClient();
+
+  const body = input.body.trim();
+  if (!body) throw new Error("Mensagem vazia");
+  const when = new Date(input.sendAt);
+  if (Number.isNaN(when.getTime())) throw new Error("Data inválida");
+  if (when.getTime() < Date.now() - 60_000) throw new Error("Escolha um horário no futuro");
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("id", input.leadId)
+    .eq("tenant_id", ctx.tenantId)
+    .single();
+  if (!lead) throw new Error("Lead não encontrado");
+
+  const { data, error } = await supabase
+    .from("scheduled_messages")
+    .insert({
+      tenant_id: ctx.tenantId,
+      lead_id: input.leadId,
+      body,
+      send_at: when.toISOString(),
+      status: "pending",
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/chat/${input.leadId}`);
+  return { id: (data as { id: string }).id };
+}
+
+export async function listScheduledMessages(leadId: string) {
+  const ctx = await requireContext();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("scheduled_messages")
+    .select("id, body, send_at, status")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("lead_id", leadId)
+    .eq("status", "pending")
+    .order("send_at", { ascending: true });
+  return (data ?? []) as { id: string; body: string | null; send_at: string; status: string }[];
+}
+
+export async function cancelScheduledMessage(input: { id: string; leadId: string }) {
+  const ctx = await requireContext();
+  const supabase = await createClient();
+  await supabase
+    .from("scheduled_messages")
+    .update({ status: "cancelled" })
+    .eq("id", input.id)
+    .eq("tenant_id", ctx.tenantId);
+  revalidatePath(`/chat/${input.leadId}`);
+}
+
 export async function setLeadAutomations(input: { leadId: string; enabled: boolean }) {
   const ctx = await requireContext();
   const supabase = await createClient();

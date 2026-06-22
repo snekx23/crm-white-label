@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
+import { processScheduledMessages } from "@/lib/chat/process-scheduled";
 import { buildConversationItems } from "@/lib/chat/build-conversation-items";
 import { buildWhatsAppGroupItems } from "@/lib/chat/group-items";
 import type { ConversationLeadRow } from "@/lib/chat/conversation-filter";
@@ -9,6 +10,9 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
   const ctx = await requireContext();
   const supabase = await createClient();
   const service = createServiceClient();
+
+  // Dispara mensagens agendadas vencidas de forma oportunística (sem bloquear a UI)
+  void processScheduledMessages(service).catch(() => {});
 
   const [{ data: conversations }, { data: waAccount }, { data: groups }, { data: groupMessageLogs }] = await Promise.all([
     supabase

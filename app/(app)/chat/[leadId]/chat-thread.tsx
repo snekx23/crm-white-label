@@ -12,13 +12,32 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
-  Paperclip,
   Mic,
   Trash2,
   FileIcon,
   Bot,
   BotOff,
+  Plus,
+  CalendarClock,
+  Image as ImageIcon,
+  FileText,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import type { QuickMessage } from "@/lib/supabase/database.types";
 import { QuickRepliesPicker } from "@/components/chat/quick-replies-picker";
 import { createClient } from "@/lib/supabase/client";
@@ -37,6 +56,7 @@ import {
   markConversationRead,
   setConversationStatusByLead,
   setLeadAutomations,
+  scheduleChatMessage,
 } from "../actions";
 
 type MediaKind = "image" | "video" | "audio" | "document";
@@ -102,6 +122,10 @@ export function ChatThread({
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSecs, setRecordSecs] = useState(0);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleText, setScheduleText] = useState("");
+  const [scheduling, setScheduling] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordChunksRef = useRef<Blob[]>([]);
@@ -359,6 +383,36 @@ export function ChatThread({
     mediaRecorderRef.current = null;
   }
 
+  function openPicker(accept: string) {
+    const input = fileInputRef.current;
+    if (!input) return;
+    input.accept = accept;
+    input.click();
+  }
+
+  function openSchedule() {
+    // pré-preenche com o texto digitado e horário +1h
+    setScheduleText(text);
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    setScheduleAt(d.toISOString().slice(0, 16));
+    setScheduleOpen(true);
+  }
+
+  function submitSchedule() {
+    const body = scheduleText.trim();
+    if (!body || !scheduleAt) return;
+    setScheduling(true);
+    void scheduleChatMessage({ leadId, body, sendAt: new Date(scheduleAt).toISOString() })
+      .then(() => {
+        setScheduleOpen(false);
+        setScheduleText("");
+        if (scheduleText.trim() === text.trim()) setText("");
+      })
+      .catch((err) => alert((err as Error).message))
+      .finally(() => setScheduling(false));
+  }
+
   const busy = pending || uploading;
 
   return (
@@ -512,22 +566,55 @@ export function ChatThread({
           </div>
         ) : (
           <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2">
+            {/* Menu "+" de anexos */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-12 w-11 shrink-0 rounded-xl text-muted-foreground hover:text-foreground"
+                  disabled={busy}
+                  title="Anexar"
+                >
+                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="w-52">
+                <DropdownMenuItem onSelect={() => openPicker("image/*,video/*")} className="cursor-pointer gap-2.5">
+                  <ImageIcon className="h-4 w-4 text-purple-500" /> Foto e vídeo
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => openPicker("application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip")}
+                  className="cursor-pointer gap-2.5"
+                >
+                  <FileText className="h-4 w-4 text-blue-500" /> Documento
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={openSchedule} className="cursor-pointer gap-2.5">
+                  <CalendarClock className="h-4 w-4 text-amber-500" /> Agendar mensagem
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <QuickRepliesPicker
               messages={quickMessages}
               disabled={busy}
               onPick={(body) => setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${body}` : body))}
             />
+
+            {/* Agendar mensagem (atalho direto) */}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="h-12 w-11 shrink-0 rounded-xl text-muted-foreground hover:text-foreground"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={openSchedule}
               disabled={busy}
-              title="Anexar arquivo"
+              title="Agendar mensagem"
             >
-              {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+              <CalendarClock className="h-5 w-5" />
             </Button>
+
             <Textarea
               rows={1}
               placeholder="Digite sua mensagem..."
@@ -567,6 +654,55 @@ export function ChatThread({
           </form>
         )}
       </div>
+
+      {/* Dialog de agendamento de mensagem */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-amber-500" />
+              Agendar mensagem
+            </DialogTitle>
+            <DialogDescription>
+              A mensagem será enviada automaticamente pelo WhatsApp no horário escolhido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-at">Data e hora</Label>
+              <Input
+                id="schedule-at"
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-text">Mensagem</Label>
+              <Textarea
+                id="schedule-text"
+                rows={4}
+                placeholder="Escreva a mensagem a ser enviada..."
+                value={scheduleText}
+                onChange={(e) => setScheduleText(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)} disabled={scheduling}>
+              Cancelar
+            </Button>
+            <Button
+              variant="brand"
+              onClick={submitSchedule}
+              disabled={scheduling || !scheduleText.trim() || !scheduleAt}
+            >
+              {scheduling ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
+              Agendar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
