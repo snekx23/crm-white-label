@@ -3,8 +3,6 @@ import {
   MessageCircle,
   Instagram,
   Facebook,
-  Globe,
-  Webhook,
   ChevronRight,
   CheckCircle2,
   Circle,
@@ -19,102 +17,95 @@ export default async function IntegrationsPage() {
   const ctx = await requireContext();
   const supabase = await createClient();
 
-  const [{ data: wppAccount }, { data: keys }, { data: tenant }, { data: igAccount }] = await Promise.all([
+  const [{ data: wppAccount }, { data: tenant }, { data: igAccount }] = await Promise.all([
     supabase.from("whatsapp_accounts").select("id, is_active").eq("tenant_id", ctx.tenantId).maybeSingle(),
-    supabase.from("lead_intake_keys").select("id, is_active").eq("tenant_id", ctx.tenantId),
     supabase.from("tenants").select("meta_pixel_id").eq("id", ctx.tenantId).single(),
     supabase.from("instagram_accounts").select("id, is_active").eq("tenant_id", ctx.tenantId).maybeSingle(),
   ]);
 
-  const wppOn = !!(wppAccount?.is_active);
-  const formsOn = (keys ?? []).some((k) => k.is_active);
-  const metaOn = !!(tenant?.meta_pixel_id);
-  const igOn = !!(igAccount?.is_active);
+  const wppOn = !!wppAccount?.is_active;
+  const metaOn = !!tenant?.meta_pixel_id;
+  const igOn = !!igAccount?.is_active;
 
   const items = [
     {
       key: "whatsapp",
       title: "WhatsApp",
-      description: "Atenda leads via Cloud API oficial da Meta, Evolution ou Z-API.",
+      description:
+        "Atenda e venda pelo WhatsApp com chat ao vivo, envio de mídia e disparos. Cloud API oficial, Evolution ou Z-API.",
       icon: MessageCircle,
       href: "/integrations/whatsapp",
       status: wppOn,
+      gradient: "from-emerald-500 to-green-600",
       tags: ["Cloud API", "Evolution", "Z-API"],
     },
     {
-      key: "form",
-      title: "Formularios web e Webhook",
-      description: "Endpoint publico com chave de API para receber leads de qualquer site, Zapier ou n8n.",
-      icon: Webhook,
-      href: "/integrations/forms",
-      status: formsOn,
-      tags: ["REST API", "Zapier", "n8n", "Make"],
-    },
-    {
       key: "instagram",
-      title: "Instagram DM",
-      description: "Capture leads das DMs do Instagram automaticamente via Meta Graph API.",
+      title: "Instagram Direct",
+      description:
+        "Capture leads das DMs do Instagram automaticamente e responda tudo dentro do CRM.",
       icon: Instagram,
       href: "/integrations/instagram",
       status: igOn,
-      tags: ["Meta", "Graph API"],
+      gradient: "from-purple-500 via-pink-500 to-orange-400",
+      tags: ["Meta", "DM", "Leads"],
     },
     {
       key: "facebook",
-      title: "Meta Ads & Pixel (CAPI)",
-      description: "Configure o seu Pixel e API de Conversões do Meta para rastreamento inteligente de vendas e ROAS no WhatsApp.",
+      title: "Meta Ads & Pixel",
+      description:
+        "Pixel e API de Conversões da Meta para rastrear vendas, otimizar campanhas e medir ROAS.",
       icon: Facebook,
       href: "/integrations/facebook",
       status: metaOn,
+      gradient: "from-blue-500 to-indigo-600",
       tags: ["Pixel", "Conversions API", "ROAS"],
-    },
-    {
-      key: "site",
-      title: "Site Solaire W+",
-      description: "Pagina padrao de captura para incluir no seu site - copie um snippet HTML.",
-      icon: Globe,
-      href: "/integrations/forms",
-      status: formsOn,
-      tags: ["HTML embed", "JS snippet"],
     },
   ];
 
   return (
     <div>
       <PageHeader
-        eyebrow="Captura de leads"
-        title="Integracoes"
-        description="Conecte canais para que leads cheguem automaticamente no seu CRM."
+        eyebrow="Canais"
+        title="Integrações"
+        description="Conecte WhatsApp, Instagram e Meta para que os leads cheguem e sejam atendidos automaticamente."
       />
-      <div className="grid gap-4 p-8 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-5 p-8 md:grid-cols-2 xl:grid-cols-3">
         {items.map((it) => {
           const Icon = it.icon;
           return (
             <Link key={it.key} href={it.href} prefetch>
-              <Card className="group h-full transition-all hover:border-brand/40 hover:shadow-elev-2">
+              <Card className="group relative h-full overflow-hidden transition-all hover:border-brand/40 hover:shadow-elev-2">
                 <CardContent className="flex h-full flex-col p-6">
                   <div className="mb-4 flex items-center justify-between">
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand/10 text-brand">
-                      <Icon className="h-5 w-5" />
+                    <div
+                      className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${it.gradient} text-white shadow-md`}
+                    >
+                      <Icon className="h-6 w-6" />
                     </div>
-                    {it.soon ? (
-                      <Badge variant="outline">Em breve</Badge>
-                    ) : it.status ? (
-                      <Badge variant="success"><CheckCircle2 className="h-3 w-3" /> Conectado</Badge>
+                    {it.status ? (
+                      <Badge variant="success">
+                        <CheckCircle2 className="h-3 w-3" /> Conectado
+                      </Badge>
                     ) : (
-                      <Badge variant="outline"><Circle className="h-3 w-3" /> Inativo</Badge>
+                      <Badge variant="outline">
+                        <Circle className="h-3 w-3" /> Inativo
+                      </Badge>
                     )}
                   </div>
                   <h3 className="font-display text-lg font-semibold">{it.title}</h3>
                   <p className="mt-1 flex-1 text-sm text-muted-foreground">{it.description}</p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {it.tags.map((t) => (
-                      <span key={t} className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      <span
+                        key={t}
+                        className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      >
                         {t}
                       </span>
                     ))}
                   </div>
-                  <div className="mt-5 flex items-center justify-end text-xs text-muted-foreground transition-colors group-hover:text-brand">
+                  <div className="mt-5 flex items-center justify-end text-xs font-medium text-muted-foreground transition-colors group-hover:text-brand">
                     Configurar <ChevronRight className="h-3.5 w-3.5" />
                   </div>
                 </CardContent>
@@ -122,6 +113,16 @@ export default async function IntegrationsPage() {
             </Link>
           );
         })}
+      </div>
+
+      <div className="px-8 pb-8">
+        <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Webhooks e APIs externas</span> agora ficam nas{" "}
+          <Link href="/automations" className="text-brand hover:underline" prefetch>
+            Automações
+          </Link>{" "}
+          — use o bloco <span className="font-medium">API</span> para integrar com qualquer serviço (Zapier, n8n, sistemas próprios).
+        </div>
       </div>
     </div>
   );

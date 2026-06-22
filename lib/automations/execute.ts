@@ -1,4 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createProvider } from "@/lib/whatsapp/factory";
+import { normalizeWhatsAppPhone } from "@/lib/whatsapp/phone";
+import type { WhatsAppAccount } from "@/lib/supabase/database.types";
 
 type Block = {
   id: string;
@@ -104,27 +107,88 @@ export async function processExecution(
 
       if (kind === "send_message" && leadId) {
         const message = interpolate(String(blockConfig.message ?? ""), lead);
-        // Queue the message for WhatsApp send (insert as outbound pending)
+        const leadPhone = String(lead.phone ?? "");
+
+        // Localiza ou cria a conversa de WhatsApp
+        const { data: account } = await supabase
+          .from("whatsapp_accounts")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+
+        let convId: string | undefined;
         const { data: conv } = await supabase
           .from("conversations")
           .select("id")
           .eq("tenant_id", tenantId)
           .eq("lead_id", leadId)
-          .in("channel", ["whatsapp", "instagram"])
-          .order("last_message_at", { ascending: false })
-          .limit(1)
+          .eq("channel", "whatsapp")
           .maybeSingle();
-
         if (conv) {
-          await supabase.from("messages").insert({
-            tenant_id: tenantId,
-            conversation_id: conv.id,
-            direction: "outbound",
-            body: message,
-            status: "pending",
-          });
+          convId = (conv as { id: string }).id;
+        } else {
+          const { data: createdConv } = await supabase
+            .from("conversations")
+            .insert({
+              tenant_id: tenantId,
+              lead_id: leadId,
+              whatsapp_account_id: (account as { id?: string } | null)?.id ?? null,
+              channel: "whatsapp",
+              last_message_at: new Date().toISOString(),
+            })
+            .select("id")
+            .single();
+          convId = (createdConv as { id: string } | null)?.id;
         }
-        result = { message_queued: true, message };
+
+        // Insere a mensagem pendente
+        const { data: pending } = convId
+          ? await supabase
+              .from("messages")
+              .insert({
+                tenant_id: tenantId,
+                conversation_id: convId,
+                direction: "outbound",
+                body: message,
+                status: "pending",
+              })
+              .select("id")
+              .single()
+          : { data: null };
+
+        // Envia de fato pelo provedor
+        const normalized = normalizeWhatsAppPhone(leadPhone) ?? leadPhone.replace(/\D/g, "");
+        if (account && normalized && pending) {
+          try {
+            const provider = createProvider(account as unknown as WhatsAppAccount);
+            const sendResult = await provider.send({ to: normalized, body: message });
+            await supabase
+              .from("messages")
+              .update(
+                sendResult.status === "sent"
+                  ? { status: "sent", external_id: sendResult.externalId }
+                  : { status: "failed", error: "Falha no envio pelo provedor" },
+              )
+              .eq("id", (pending as { id: string }).id);
+            if (convId && sendResult.status === "sent") {
+              await supabase
+                .from("conversations")
+                .update({ last_message_at: new Date().toISOString(), status: "aguardando" })
+                .eq("id", convId);
+            }
+            result = { sent: sendResult.status === "sent", message };
+          } catch (sendErr) {
+            await supabase
+              .from("messages")
+              .update({ status: "failed", error: (sendErr as Error).message })
+              .eq("id", (pending as { id: string }).id);
+            result = { sent: false, error: (sendErr as Error).message };
+          }
+        } else {
+          result = { message_queued: Boolean(convId), message, reason: !account ? "sem conta WhatsApp" : "sem telefone" };
+        }
       } else if (kind === "move_stage" && leadId) {
         const stageId = String(blockConfig.stage_id ?? "");
         if (stageId) {
@@ -186,6 +250,104 @@ export async function processExecution(
           payload: { message },
         });
         result = { logged: true };
+      } else if (kind === "field_ops" && leadId) {
+        const field = String(blockConfig.field ?? "");
+        const value = interpolate(String(blockConfig.value ?? ""), lead);
+        const ALLOWED = ["name", "email", "phone", "source", "value", "notes", "stage_id", "assigned_to"];
+        if (field && ALLOWED.includes(field)) {
+          await supabase
+            .from("leads")
+            .update({ [field]: value })
+            .eq("id", leadId)
+            .eq("tenant_id", tenantId);
+          lead[field] = value;
+          result = { field, value };
+        } else {
+          result = { skipped: `campo "${field}" não permitido` };
+        }
+      } else if (kind === "api_call") {
+        const url = interpolate(String(blockConfig.url ?? ""), lead);
+        const method = String(blockConfig.method ?? "POST").toUpperCase();
+        const bodyTemplate = String(blockConfig.body ?? "");
+        const body = bodyTemplate ? interpolate(bodyTemplate, lead) : undefined;
+        if (!url) {
+          result = { skipped: "URL ausente" };
+        } else {
+          const resp = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            ...(method !== "GET" && body ? { body } : {}),
+          });
+          let responseText = "";
+          try {
+            responseText = (await resp.text()).slice(0, 500);
+          } catch {
+            /* ignore */
+          }
+          result = { api_status: resp.status, ok: resp.ok, response: responseText };
+        }
+      } else if (kind === "randomizer") {
+        // Escolhe aleatoriamente um dos caminhos de saída (teste A/B)
+        const nexts = findNextBlocks(block.id, connections, blocks);
+        if (nexts.length > 0) {
+          const chosen = nexts[Math.floor(Math.random() * nexts.length)];
+          if (!visited.has(chosen.id)) queue.push(chosen);
+        }
+        if (step) {
+          await supabase
+            .from("automation_execution_steps")
+            .update({ status: "done", result_payload: { branches: nexts.length } })
+            .eq("id", step.id);
+        }
+        continue;
+      } else if (kind === "ai") {
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        const prompt = interpolate(String(blockConfig.prompt ?? ""), lead);
+        if (!apiKey) {
+          result = { skipped: "ANTHROPIC_API_KEY não configurada" };
+        } else if (!prompt) {
+          result = { skipped: "prompt vazio" };
+        } else {
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 512,
+              messages: [
+                {
+                  role: "user",
+                  content: `${prompt}\n\nDados do lead (JSON): ${JSON.stringify(lead)}`,
+                },
+              ],
+            }),
+          });
+          const data = (await resp.json()) as { content?: { text?: string }[]; error?: { message?: string } };
+          const textOut = data?.content?.[0]?.text ?? "";
+          if (leadId && textOut) {
+            await supabase.from("lead_activities").insert({
+              tenant_id: tenantId,
+              lead_id: leadId,
+              kind: "automation",
+              payload: { ai: textOut },
+            });
+          }
+          result = { ai_response: textOut.slice(0, 500), error: data?.error?.message };
+        }
+      } else if (kind === "javascript") {
+        const code = String(blockConfig.code ?? "");
+        try {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function("lead", code);
+          const out = fn({ ...lead });
+          result = { js_result: typeof out === "object" ? JSON.stringify(out) : String(out) };
+        } catch (jsErr) {
+          result = { js_error: (jsErr as Error).message };
+        }
       } else if (kind === "wait") {
         const minutes = Number(blockConfig.minutes ?? 60);
         const resumeAt = new Date(Date.now() + minutes * 60000).toISOString();
