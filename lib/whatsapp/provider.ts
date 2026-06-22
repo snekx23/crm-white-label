@@ -7,6 +7,17 @@ export interface SendMessageInput {
   mediaType?: string;
 }
 
+export type MediaKind = "image" | "video" | "audio" | "document";
+
+export interface SendMediaInput {
+  to: string;
+  mediaUrl: string;
+  mediaKind: MediaKind;
+  caption?: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
 /** Meta Cloud API template (HSM). Evolution/Z-API: converted to plain text in adapters. */
 export interface SendTemplateInput {
   to: string;
@@ -54,5 +65,7 @@ export interface WhatsAppProvider {
   send(input: SendMessageInput): Promise<SendMessageResult>;
   /** Optional: not all providers support Meta-style templates; fallback is plain text. */
   sendTemplate?(input: SendTemplateInput): Promise<SendMessageResult>;
+  /** Envia mídia (imagem, vídeo, áudio, documento) a partir de uma URL pública. */
+  sendMedia?(input: SendMediaInput): Promise<SendMessageResult>;
   parseWebhook(payload: unknown): InboundNormalized[];
 }

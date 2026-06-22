@@ -2,19 +2,43 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Send, User, Loader2, Mic2, Pause, Play, Check, CheckCheck } from "lucide-react";
+import {
+  Send,
+  User,
+  Loader2,
+  Mic2,
+  Pause,
+  Play,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  Paperclip,
+  Mic,
+  Trash2,
+  FileIcon,
+} from "lucide-react";
 import type { QuickMessage } from "@/lib/supabase/database.types";
 import { QuickRepliesPicker } from "@/components/chat/quick-replies-picker";
 import { createClient } from "@/lib/supabase/client";
 import { fetchMessages } from "@/lib/chat/client";
-import type { ChatMessage } from "@/lib/chat/types";
+import type { ChatMessage, ConversationStatus } from "@/lib/chat/types";
+import { CONVERSATION_STATUSES, STATUS_META } from "@/lib/chat/status";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, initials } from "@/lib/utils";
 import { displayLeadName, displayLeadSubtitle } from "@/lib/leads/display";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LeadDeleteButton } from "@/components/leads/lead-delete-button";
-import { sendChatMessage, markConversationRead } from "../actions";
+import { sendChatMessage, sendChatMedia, markConversationRead, setConversationStatusByLead } from "../actions";
+
+type MediaKind = "image" | "video" | "audio" | "document";
+
+function detectMediaKind(mime: string): MediaKind {
+  if (mime.startsWith("image")) return "image";
+  if (mime.startsWith("video")) return "video";
+  if (mime.startsWith("audio")) return "audio";
+  return "document";
+}
 
 const POLL_MS = 10_000;
 
@@ -39,16 +63,20 @@ function mergeMessages(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessag
 
 export function ChatThread({
   leadId,
+  tenantId,
   leadName,
   leadPhone,
   conversationId: initialConversationId,
+  initialStatus = "nao_iniciada",
   initialMessages,
   quickMessages = [],
 }: {
   leadId: string;
+  tenantId: string;
   leadName: string;
   leadPhone: string;
   conversationId: string | null;
+  initialStatus?: ConversationStatus;
   initialMessages: ChatMessage[];
   quickMessages?: QuickMessage[];
 }) {
@@ -56,9 +84,17 @@ export function ChatThread({
   const displayPhone = displayLeadSubtitle(leadPhone);
 
   const [conversationId, setConversationId] = useState(initialConversationId);
+  const [status, setStatus] = useState<ConversationStatus>(initialStatus);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState("");
   const [pending, start] = useTransition();
+  const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -98,10 +134,21 @@ export function ChatThread({
 
   useEffect(() => {
     setConversationId(initialConversationId);
+    setStatus(initialStatus);
     setMessages(initialMessages);
     shouldStickToBottomRef.current = true;
     requestAnimationFrame(() => scrollToBottom("auto"));
-  }, [leadId, initialConversationId, initialMessages]);
+  }, [leadId, initialConversationId, initialStatus, initialMessages]);
+
+  const changeStatus = useCallback(
+    (next: ConversationStatus) => {
+      setStatus(next);
+      void setConversationStatusByLead({ leadId, status: next }).catch(() => {
+        /* mantém otimista */
+      });
+    },
+    [leadId],
+  );
 
   useEffect(() => {
     if (!shouldStickToBottomRef.current) return;
@@ -171,6 +218,7 @@ export function ChatThread({
     shouldStickToBottomRef.current = true;
     setText("");
     setMessages((prev) => [...prev, optimistic]);
+    setStatus("aguardando");
 
     start(async () => {
       try {
@@ -187,6 +235,110 @@ export function ChatThread({
     });
   }
 
+  const uploadAndSend = useCallback(
+    async (file: Blob, fileName: string, kind: MediaKind) => {
+      setUploading(true);
+      shouldStickToBottomRef.current = true;
+      const optimisticId = `opt-${Date.now()}`;
+      const localUrl = URL.createObjectURL(file);
+      const optimistic: ChatMessage = {
+        id: optimisticId,
+        body: kind === "document" ? `📎 ${fileName}` : "",
+        direction: "outbound",
+        created_at: new Date().toISOString(),
+        status: "pending",
+        media_url: localUrl,
+        media_type: kind,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+      setStatus("aguardando");
+
+      try {
+        const supabase = createClient();
+        const safeName = fileName.replace(/[^\w.\-]+/g, "_");
+        const path = `${tenantId}/${leadId}/${crypto.randomUUID()}-${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("chat-media")
+          .upload(path, file, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: file.type || undefined,
+          });
+        if (upErr) throw new Error(upErr.message);
+
+        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+        const result = await sendChatMedia({
+          leadId,
+          mediaUrl: pub.publicUrl,
+          mediaKind: kind,
+          fileName,
+          mimeType: file.type || undefined,
+        });
+        if (!conversationId) setConversationId(result.conversationId);
+        setMessages((prev) => {
+          const withoutOpt = prev.filter((m) => m.id !== optimisticId);
+          return mergeMessages(withoutOpt, [result.message]);
+        });
+      } catch (err) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        alert((err as Error).message);
+      } finally {
+        URL.revokeObjectURL(localUrl);
+        setUploading(false);
+      }
+    },
+    [tenantId, leadId, conversationId],
+  );
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert("Arquivo muito grande (máximo 25 MB).");
+      return;
+    }
+    void uploadAndSend(file, file.name, detectMediaKind(file.type));
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recordChunksRef.current = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) recordChunksRef.current.push(ev.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordChunksRef.current, { type: "audio/ogg" });
+        if (blob.size > 0) void uploadAndSend(blob, `audio-${Date.now()}.ogg`, "audio");
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setRecording(true);
+      setRecordSecs(0);
+      recordTimerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+    } catch {
+      alert("Não foi possível acessar o microfone. Verifique as permissões do navegador.");
+    }
+  }
+
+  function stopRecording(cancel = false) {
+    const mr = mediaRecorderRef.current;
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    setRecording(false);
+    if (!mr) return;
+    if (cancel) {
+      recordChunksRef.current = [];
+      mr.onstop = () => mr.stream.getTracks().forEach((t) => t.stop());
+    }
+    mr.stop();
+    mediaRecorderRef.current = null;
+  }
+
+  const busy = pending || uploading;
+
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(900px_520px_at_50%_-8%,hsl(var(--brand)/0.07),transparent_68%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]">
       <header className="flex shrink-0 items-center justify-between border-b border-border/50 bg-card/78 px-5 py-3.5 backdrop-blur-md">
@@ -201,7 +353,8 @@ export function ChatThread({
             <p className="truncate text-xs text-muted-foreground">{displayPhone}</p>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <StatusSelector status={status} onChange={changeStatus} />
           <Button asChild variant="outline" size="sm" className="rounded-lg">
             <Link href={`/leads/${leadId}`} prefetch>
               <User className="h-4 w-4" /> Perfil
@@ -281,41 +434,170 @@ export function ChatThread({
         <div ref={endRef} />
       </div>
 
-      <form
-        onSubmit={onSubmit}
-        className="shrink-0 border-t border-border/50 bg-card/92 px-4 py-3 backdrop-blur-md sm:px-6"
-      >
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <QuickRepliesPicker
-            messages={quickMessages}
-            disabled={pending}
-            onPick={(body) => setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${body}` : body))}
-          />
-          <Textarea
-            rows={1}
-            placeholder="Digite sua mensagem..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                onSubmit(e);
-              }
-            }}
-            className="min-h-[48px] max-h-32 flex-1 resize-none rounded-2xl border-border/60 bg-background/70 py-3"
-          />
-          <Button
-            type="submit"
-            variant="brand"
-            size="icon"
-            className="h-12 w-12 shrink-0 rounded-xl"
-            disabled={pending || !text.trim()}
-          >
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        </div>
-      </form>
+      <div className="shrink-0 border-t border-border/50 bg-card/92 px-4 py-3 backdrop-blur-md sm:px-6">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          className="hidden"
+          onChange={onPickFile}
+        />
+
+        {recording ? (
+          <div className="mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+            <span className="flex h-3 w-3 items-center justify-center">
+              <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
+            </span>
+            <span className="font-mono text-sm font-medium text-red-600 dark:text-red-400">
+              Gravando… {Math.floor(recordSecs / 60)}:{(recordSecs % 60).toString().padStart(2, "0")}
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-xl text-muted-foreground"
+                onClick={() => stopRecording(true)}
+                title="Cancelar"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="brand"
+                size="icon"
+                className="h-10 w-10 rounded-xl"
+                onClick={() => stopRecording(false)}
+                title="Enviar áudio"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={onSubmit} className="mx-auto flex max-w-3xl items-end gap-2">
+            <QuickRepliesPicker
+              messages={quickMessages}
+              disabled={busy}
+              onPick={(body) => setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${body}` : body))}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-12 w-11 shrink-0 rounded-xl text-muted-foreground hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+              title="Anexar arquivo"
+            >
+              {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+            </Button>
+            <Textarea
+              rows={1}
+              placeholder="Digite sua mensagem..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  onSubmit(e);
+                }
+              }}
+              className="min-h-[48px] max-h-32 flex-1 resize-none rounded-2xl border-border/60 bg-background/70 py-3"
+            />
+            {text.trim() ? (
+              <Button
+                type="submit"
+                variant="brand"
+                size="icon"
+                className="h-12 w-12 shrink-0 rounded-xl"
+                disabled={busy}
+              >
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="brand"
+                size="icon"
+                className="h-12 w-12 shrink-0 rounded-xl"
+                onClick={startRecording}
+                disabled={busy}
+                title="Gravar áudio"
+              >
+                <Mic className="h-5 w-5" />
+              </Button>
+            )}
+          </form>
+        )}
+      </div>
     </section>
+  );
+}
+
+function StatusSelector({
+  status,
+  onChange,
+}: {
+  status: ConversationStatus;
+  onChange: (next: ConversationStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const meta = STATUS_META[status];
+  const Icon = meta.icon;
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+          meta.pill,
+        )}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {meta.label}
+        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1.5 w-52 overflow-hidden rounded-xl border border-border/60 bg-popover p-1 shadow-elev-2">
+          {CONVERSATION_STATUSES.map((s) => {
+            const ItemIcon = s.icon;
+            const activeItem = s.value === status;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => {
+                  onChange(s.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted/60",
+                  activeItem && "bg-muted/40",
+                )}
+              >
+                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", s.dot)} />
+                <ItemIcon className={cn("h-4 w-4 shrink-0", s.text)} />
+                <span className="flex-1">{s.label}</span>
+                {activeItem && <Check className="h-4 w-4 text-brand" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -347,6 +629,26 @@ function MessageContent({ message: m }: { message: ChatMessage }) {
           <p className="whitespace-pre-wrap break-words">{m.body}</p>
         )}
       </div>
+    );
+  }
+
+  if (url && (type === "document" || type.startsWith("application"))) {
+    const label = m.body?.replace(/^📎\s*/, "") || "Documento";
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+          m.direction === "outbound"
+            ? "border-chat-outbound-foreground/20 hover:bg-chat-outbound-foreground/10"
+            : "border-border/60 hover:bg-muted/50",
+        )}
+      >
+        <FileIcon className="h-5 w-5 shrink-0 opacity-80" />
+        <span className="truncate text-sm font-medium underline-offset-2 hover:underline">{label}</span>
+      </a>
     );
   }
 

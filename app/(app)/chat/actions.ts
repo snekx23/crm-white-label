@@ -119,7 +119,7 @@ export async function sendChatMessage(input: {
       .single();
     await supabase
       .from("conversations")
-      .update({ last_message_at: new Date().toISOString() })
+      .update({ last_message_at: new Date().toISOString(), status: "aguardando" })
       .eq("id", conversationId);
 
     revalidatePath(`/chat/${lead.id}`);
@@ -144,6 +144,154 @@ export async function sendChatMessage(input: {
   }
 }
 
+type MediaKind = "image" | "video" | "audio" | "document";
+
+export async function sendChatMedia(input: {
+  leadId: string;
+  mediaUrl: string;
+  mediaKind: MediaKind;
+  fileName?: string;
+  mimeType?: string;
+  caption?: string;
+}): Promise<{ conversationId: string; message: ChatMessage }> {
+  const ctx = await requireContext();
+  const supabase = await createClient();
+
+  if (!input.mediaUrl) throw new Error("Mídia ausente");
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, phone, name")
+    .eq("id", input.leadId)
+    .eq("tenant_id", ctx.tenantId)
+    .single();
+  if (!lead?.phone) throw new Error("Lead sem telefone");
+
+  const to = normalizeWhatsAppPhone(lead.phone) ?? lead.phone.replace(/\D/g, "");
+
+  const { data: account } = await supabase
+    .from("whatsapp_accounts")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+
+  // Encontra ou cria a conversa
+  let conversationId: string | undefined;
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("lead_id", lead.id)
+    .eq("channel", "whatsapp")
+    .maybeSingle();
+
+  if (conv?.id) {
+    conversationId = conv.id;
+  } else {
+    const { data: created } = await supabase
+      .from("conversations")
+      .insert({
+        tenant_id: ctx.tenantId,
+        lead_id: lead.id,
+        whatsapp_account_id: account?.id ?? null,
+        channel: "whatsapp",
+        last_message_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    conversationId = created?.id;
+  }
+  if (!conversationId) throw new Error("Falha ao criar conversa");
+
+  // Corpo de prévia por tipo
+  const previewBody =
+    input.caption?.trim() ||
+    (input.mediaKind === "image"
+      ? "📷 Imagem"
+      : input.mediaKind === "video"
+        ? "🎬 Vídeo"
+        : input.mediaKind === "audio"
+          ? "🎤 Áudio"
+          : `📎 ${input.fileName ?? "Documento"}`);
+
+  const { data: pendingMsg } = await supabase
+    .from("messages")
+    .insert({
+      tenant_id: ctx.tenantId,
+      conversation_id: conversationId,
+      user_id: ctx.userId,
+      direction: "outbound",
+      body: previewBody,
+      media_url: input.mediaUrl,
+      media_type: input.mediaKind,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (!account) {
+    await supabase
+      .from("messages")
+      .update({ status: "failed", error: "Nenhuma conta WhatsApp configurada" })
+      .eq("id", pendingMsg!.id);
+    throw new Error("Configure uma conta WhatsApp em /settings/whatsapp");
+  }
+
+  try {
+    const provider = createProvider(account as WhatsAppAccount);
+    if (!provider.sendMedia) {
+      throw new Error("Este provedor de WhatsApp não suporta envio de mídia.");
+    }
+    const result = await provider.sendMedia({
+      to,
+      mediaUrl: input.mediaUrl,
+      mediaKind: input.mediaKind,
+      caption: input.caption,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+    });
+    if (result.status !== "sent") {
+      const errMsg = providerErrorMessage(result);
+      await supabase.from("messages").update({ status: "failed", error: errMsg }).eq("id", pendingMsg!.id);
+      throw new Error(errMsg);
+    }
+    const { data: sentRow } = await supabase
+      .from("messages")
+      .update({ status: "sent", external_id: result.externalId })
+      .eq("id", pendingMsg!.id)
+      .select("id, body, direction, created_at, status, media_url, media_type")
+      .single();
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString(), status: "aguardando" })
+      .eq("id", conversationId);
+
+    revalidatePath(`/chat/${lead.id}`);
+    revalidatePath("/chat");
+
+    return {
+      conversationId,
+      message: (sentRow ?? {
+        id: pendingMsg!.id,
+        body: previewBody,
+        direction: "outbound",
+        created_at: new Date().toISOString(),
+        status: "sent",
+        media_url: input.mediaUrl,
+        media_type: input.mediaKind,
+      }) as ChatMessage,
+    };
+  } catch (e) {
+    await supabase
+      .from("messages")
+      .update({ status: "failed", error: (e as Error).message })
+      .eq("id", pendingMsg!.id);
+    throw e;
+  }
+}
+
 export async function markConversationRead(conversationId: string) {
   const ctx = await requireContext();
   const supabase = await createClient();
@@ -152,6 +300,38 @@ export async function markConversationRead(conversationId: string) {
     .update({ unread_count: 0 })
     .eq("id", conversationId)
     .eq("tenant_id", ctx.tenantId);
+}
+
+const VALID_STATUSES = ["nao_iniciada", "aguardando", "em_atendimento", "resolvida"] as const;
+type ConvStatus = (typeof VALID_STATUSES)[number];
+
+export async function setConversationStatus(input: { conversationId: string; status: ConvStatus }) {
+  if (!VALID_STATUSES.includes(input.status)) throw new Error("Status inválido");
+  const ctx = await requireContext();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("conversations")
+    .update({ status: input.status })
+    .eq("id", input.conversationId)
+    .eq("tenant_id", ctx.tenantId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/chat");
+}
+
+/** Define o status pelo lead (usado no header do chat, que conhece o leadId). */
+export async function setConversationStatusByLead(input: { leadId: string; status: ConvStatus }) {
+  if (!VALID_STATUSES.includes(input.status)) throw new Error("Status inválido");
+  const ctx = await requireContext();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("conversations")
+    .update({ status: input.status })
+    .eq("lead_id", input.leadId)
+    .eq("tenant_id", ctx.tenantId)
+    .eq("channel", "whatsapp");
+  if (error) throw new Error(error.message);
+  revalidatePath(`/chat/${input.leadId}`);
+  revalidatePath("/chat");
 }
 
 export async function addGroupLabel(input: { groupId: string; name: string }) {

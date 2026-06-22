@@ -18,6 +18,7 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
         lead_id,
         last_message_at,
         unread_count,
+        status,
         leads(name, phone, whatsapp_lid),
         messages(body, direction, created_at)
       `)

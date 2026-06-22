@@ -207,6 +207,12 @@ export interface WhatsAppGroupLabelAssignment {
   created_at: string;
 }
 
+export type ConversationStatus =
+  | "nao_iniciada"
+  | "aguardando"
+  | "em_atendimento"
+  | "resolvida";
+
 export interface Conversation {
   id: string;
   tenant_id: string;
@@ -215,6 +221,7 @@ export interface Conversation {
   channel: string;
   last_message_at: string | null;
   unread_count: number;
+  status: ConversationStatus;
   created_at: string;
 }
 

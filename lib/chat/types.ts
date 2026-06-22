@@ -8,6 +8,12 @@ export type ChatMessage = {
   media_type?: string | null;
 };
 
+export type ConversationStatus =
+  | "nao_iniciada"
+  | "aguardando"
+  | "em_atendimento"
+  | "resolvida";
+
 export type ConversationListItem = {
   id: string;
   leadId: string;
@@ -18,6 +24,7 @@ export type ConversationListItem = {
   unread: number;
   lastPreview: string | null;
   lastDirection: string | null;
+  status: ConversationStatus;
 };
 
 export type GroupLabelItem = {

@@ -18,8 +18,8 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Save, Zap, Play, Pause, History } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { TriggerNode, ActionNode, ConditionNode, WaitNode, EndNode } from "./node-types";
 import { BlockPanel } from "./block-panel";
 import { NodeConfigPanel } from "./node-config-panel";
@@ -56,14 +56,32 @@ function toReactFlowNodes(blocks: FlowBlock[]): Node[] {
   }));
 }
 
+function edgeLabel(handle?: string | null): string | undefined {
+  if (handle === "yes") return "Sim";
+  if (handle === "no") return "Não";
+  return undefined;
+}
+
+function edgeColor(handle?: string | null): string {
+  if (handle === "yes") return "#10b981";
+  if (handle === "no") return "#f87171";
+  return "hsl(var(--brand))";
+}
+
 function toReactFlowEdges(connections: FlowEdge[]): Edge[] {
   return connections.map((c) => ({
     id: c.id,
     source: c.source,
     target: c.target,
     sourceHandle: c.sourceHandle ?? null,
+    type: "smoothstep",
     animated: true,
-    style: { stroke: "hsl(var(--brand))", strokeWidth: 2 },
+    label: edgeLabel(c.sourceHandle),
+    labelStyle: { fontSize: 10, fontWeight: 600, fill: edgeColor(c.sourceHandle) },
+    labelBgStyle: { fill: "hsl(var(--card))", fillOpacity: 0.9 },
+    labelBgPadding: [4, 2] as [number, number],
+    labelBgBorderRadius: 4,
+    style: { stroke: edgeColor(c.sourceHandle), strokeWidth: 2 },
   }));
 }
 
@@ -91,8 +109,14 @@ export function FlowEditor({
         addEdge(
           {
             ...params,
+            type: "smoothstep",
             animated: true,
-            style: { stroke: "hsl(var(--brand))", strokeWidth: 2 },
+            label: edgeLabel(params.sourceHandle),
+            labelStyle: { fontSize: 10, fontWeight: 600, fill: edgeColor(params.sourceHandle) },
+            labelBgStyle: { fill: "hsl(var(--card))", fillOpacity: 0.9 },
+            labelBgPadding: [4, 2] as [number, number],
+            labelBgBorderRadius: 4,
+            style: { stroke: edgeColor(params.sourceHandle), strokeWidth: 2 },
           },
           eds,
         ),
@@ -110,15 +134,17 @@ export function FlowEditor({
 
   function addBlock(type: string, kind: string, label: string) {
     const id = `${type}_${Date.now()}`;
-    const centerX = 250;
-    const centerY = 150 + nodes.length * 120;
+    // Distribui os novos blocos em diagonal suave para evitar sobreposição
+    const offset = nodes.length;
+    const x = 320 + (offset % 3) * 60;
+    const y = 120 + offset * 90;
     setNodes((nds) => [
       ...nds,
       {
         id,
         type,
-        position: { x: centerX, y: centerY },
-        data: { label, kind, config: {} },
+        position: { x, y },
+        data: { label, kind, config: {}, stats: {} },
       },
     ]);
   }
@@ -176,44 +202,58 @@ export function FlowEditor({
           fitView
           deleteKeyCode="Delete"
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} className="opacity-30" />
-          <Controls />
-          <MiniMap nodeColor={() => "hsl(var(--brand))"} className="!bg-card !border !border-border" />
-
-          <Panel position="top-right" className="flex items-center gap-2">
-            <Badge
-              variant={flowStatus === "active" ? "default" : "outline"}
-              className={flowStatus === "active" ? "bg-green-600" : ""}
-            >
-              {flowStatus === "active" ? "Ativo" : flowStatus === "paused" ? "Pausado" : "Rascunho"}
-            </Badge>
-            <Button variant="outline" size="sm" onClick={toggleStatus}>
-              {flowStatus === "active" ? (
-                <>
-                  <Pause className="mr-1.5 h-3.5 w-3.5" /> Pausar
-                </>
-              ) : (
-                <>
-                  <Play className="mr-1.5 h-3.5 w-3.5" /> Ativar
-                </>
-              )}
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              <Save className="mr-1.5 h-3.5 w-3.5" />
-              {saving ? "Salvando..." : "Salvar e publicar"}
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/automations/${flowId}/logs`}>
-                <History className="mr-1.5 h-3.5 w-3.5" />
-                Logs
-              </Link>
-            </Button>
-          </Panel>
+          <Background variant={BackgroundVariant.Dots} gap={18} size={1.5} className="opacity-40" />
+          <Controls className="!rounded-xl !border !border-border !bg-card !shadow-lg [&>button]:!border-border [&>button]:!bg-card" />
+          <MiniMap
+            nodeColor={() => "hsl(var(--brand))"}
+            pannable
+            zoomable
+            className="!rounded-xl !border !border-border !bg-card"
+          />
 
           <Panel position="top-left">
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 shadow-sm">
-              <Zap className="h-4 w-4 text-brand" />
-              <span className="text-sm font-semibold">{flowName}</span>
+            <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-2 shadow-lg">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand/15 text-brand">
+                <Zap className="h-4 w-4" />
+              </span>
+              <div className="leading-tight">
+                <p className="text-sm font-semibold">{flowName}</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {flowStatus === "active" ? "Ativo" : flowStatus === "paused" ? "Pausado" : "Rascunho"}
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "ml-1 h-2 w-2 rounded-full",
+                  flowStatus === "active" ? "bg-emerald-500" : flowStatus === "paused" ? "bg-amber-500" : "bg-muted-foreground/40",
+                )}
+              />
+            </div>
+          </Panel>
+
+          <Panel position="top-right">
+            <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+              <button
+                onClick={toggleStatus}
+                title={flowStatus === "active" ? "Pausar" : "Ativar"}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {flowStatus === "active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                {flowStatus === "active" ? "Pausar" : "Ativar"}
+              </button>
+              <Link
+                href={`/automations/${flowId}/logs`}
+                title="Logs de execução"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <History className="h-3.5 w-3.5" />
+                Logs
+              </Link>
+              <div className="mx-0.5 h-5 w-px bg-border" />
+              <Button size="sm" className="h-8 rounded-lg" onClick={handleSave} disabled={saving}>
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                {saving ? "Salvando..." : "Salvar e publicar"}
+              </Button>
             </div>
           </Panel>
         </ReactFlow>

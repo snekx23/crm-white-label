@@ -34,6 +34,7 @@ export function buildConversationItems(
       unread: c.unread_count ?? 0,
       lastPreview: preview?.body ?? null,
       lastDirection: preview?.direction ?? null,
+      status: c.status ?? "nao_iniciada",
     };
   });
 }

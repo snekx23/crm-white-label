@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
 import { displayLeadName } from "@/lib/leads/display";
 import { listQuickMessages } from "@/app/(app)/settings/quick-messages-actions";
+import type { ConversationStatus } from "@/lib/chat/types";
 import { ChatThread } from "./chat-thread";
 
 export default async function ChatThreadPage({ params }: { params: Promise<{ leadId: string }> }) {
@@ -22,13 +23,13 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ lea
 
   const convoRes = await supabase
     .from("conversations")
-    .select("id")
+    .select("id, status")
     .eq("tenant_id", ctx.tenantId)
     .eq("lead_id", leadId)
     .eq("channel", "whatsapp")
     .maybeSingle();
 
-  const convo = convoRes.data as { id: string } | null;
+  const convo = convoRes.data as { id: string; status: string | null } | null;
 
   let messages: {
     id: string;
@@ -53,9 +54,11 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ lea
   return (
     <ChatThread
       leadId={lead.id}
+      tenantId={ctx.tenantId}
       leadName={displayLeadName(lead.name, lead.phone)}
       leadPhone={lead.phone ?? ""}
       conversationId={convo?.id ?? null}
+      initialStatus={(convo?.status as ConversationStatus | null) ?? "nao_iniciada"}
       initialMessages={messages}
       quickMessages={quickMessages}
     />

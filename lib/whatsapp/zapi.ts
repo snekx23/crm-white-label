@@ -9,6 +9,7 @@ import { isZapiStatusOrBroadcastNoise } from "./zapi-noise";
 import { zapiEventToDeliveryStatus } from "./zapi-status";
 import type {
   InboundNormalized,
+  SendMediaInput,
   SendMessageInput,
   SendMessageResult,
   SendTemplateInput,
@@ -397,6 +398,78 @@ export class ZapiProvider implements WhatsAppProvider {
         phone,
         message: input.body ?? "",
       }),
+    });
+
+    const data = (await res.json()) as {
+      messageId?: string;
+      zaapId?: string;
+      id?: string;
+      error?: string;
+      message?: string;
+    };
+
+    if (!res.ok || data.error) {
+      const msg = zapiErrorMessage(data, res.status);
+      if (msg.includes("null not allowed") || res.status === 401) {
+        throw new Error(
+          "Z-API: Client-Token obrigatório. No painel Z-API → Segurança → Token de segurança da conta: copie e cole em Client Token no CRM.",
+        );
+      }
+      throw new Error(msg);
+    }
+
+    return {
+      externalId: data.messageId ?? data.zaapId ?? data.id ?? "",
+      status: "sent",
+      raw: data,
+    };
+  }
+
+  async sendMedia(input: SendMediaInput): Promise<SendMessageResult> {
+    const phone = normalizeWhatsAppPhone(input.to);
+    if (!phone) {
+      throw new Error(
+        `Telefone inválido (${input.to}). Use DDI + DDD + número, ex: 5511999999999`,
+      );
+    }
+
+    const status = await this.getConnectionStatus();
+    if (!status.connected) {
+      throw new Error(
+        status.error ??
+          "Z-API: instância desconectada. Abra o painel Z-API, escaneie o QR Code e aguarde status conectado.",
+      );
+    }
+
+    let path: string;
+    let payload: Record<string, unknown>;
+
+    switch (input.mediaKind) {
+      case "image":
+        path = "/send-image";
+        payload = { phone, image: input.mediaUrl, caption: input.caption ?? "" };
+        break;
+      case "video":
+        path = "/send-video";
+        payload = { phone, video: input.mediaUrl, caption: input.caption ?? "" };
+        break;
+      case "audio":
+        path = "/send-audio";
+        payload = { phone, audio: input.mediaUrl };
+        break;
+      case "document":
+      default: {
+        const ext = (input.fileName?.split(".").pop() || "pdf").toLowerCase();
+        path = `/send-document/${encodeURIComponent(ext)}`;
+        payload = { phone, document: input.mediaUrl, fileName: input.fileName ?? `arquivo.${ext}` };
+        break;
+      }
+    }
+
+    const res = await fetch(this.basePath(path), {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(payload),
     });
 
     const data = (await res.json()) as {

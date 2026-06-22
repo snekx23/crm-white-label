@@ -199,6 +199,113 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
           </>
         )}
 
+        {/* randomizer */}
+        {kind === "randomizer" && (
+          <div className="space-y-1.5">
+            <Label>Número de caminhos</Label>
+            <Input
+              type="number"
+              min={2}
+              max={5}
+              placeholder="2"
+              value={String(config.branches ?? "")}
+              onChange={(e) => set("branches", Number(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Distribui os leads aleatoriamente entre os caminhos (teste A/B).
+            </p>
+          </div>
+        )}
+
+        {/* api_call */}
+        {kind === "api_call" && (
+          <>
+            <div className="space-y-1.5">
+              <Label>Método</Label>
+              <Select value={String(config.method ?? "POST")} onValueChange={(v) => set("method", v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GET">GET</SelectItem>
+                  <SelectItem value="POST">POST</SelectItem>
+                  <SelectItem value="PUT">PUT</SelectItem>
+                  <SelectItem value="PATCH">PATCH</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>URL do endpoint</Label>
+              <Input
+                placeholder="https://api.exemplo.com/webhook"
+                value={String(config.url ?? "")}
+                onChange={(e) => set("url", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Corpo (JSON)</Label>
+              <Textarea
+                rows={3}
+                placeholder='{"name": "{name}", "phone": "{phone}"}'
+                value={String(config.body ?? "")}
+                onChange={(e) => set("body", e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* field_ops */}
+        {kind === "field_ops" && (
+          <>
+            <div className="space-y-1.5">
+              <Label>Campo</Label>
+              <Input
+                placeholder="ex: score"
+                value={String(config.field ?? "")}
+                onChange={(e) => set("field", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Novo valor</Label>
+              <Input
+                placeholder="ex: 10"
+                value={String(config.value ?? "")}
+                onChange={(e) => set("value", e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* ai */}
+        {kind === "ai" && (
+          <div className="space-y-1.5">
+            <Label>Instrução para a IA</Label>
+            <Textarea
+              rows={4}
+              placeholder="Classifique o interesse do lead com base na última mensagem e retorne uma tag."
+              value={String(config.prompt ?? "")}
+              onChange={(e) => set("prompt", e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              A IA processa a conversa e pode definir tags, etapas ou respostas.
+            </p>
+          </div>
+        )}
+
+        {/* javascript */}
+        {kind === "javascript" && (
+          <div className="space-y-1.5">
+            <Label>Código JavaScript</Label>
+            <Textarea
+              rows={5}
+              className="font-mono text-xs"
+              placeholder="// lead disponível como `lead`\nreturn lead.value > 1000;"
+              value={String(config.code ?? "")}
+              onChange={(e) => set("code", e.target.value)}
+            />
+          </div>
+        )}
+
         {/* Triggers: no config needed */}
         {node.type === "trigger" && (
           <p className="text-xs text-muted-foreground italic">

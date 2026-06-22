@@ -2,11 +2,18 @@ import type { WhatsAppAccount } from "@/lib/supabase/database.types";
 import { isSelfWhatsAppContact } from "@/lib/whatsapp/self-contact";
 import { isValidBrazilWhatsAppPhone } from "@/lib/whatsapp/phone";
 
+export type ConversationStatus =
+  | "nao_iniciada"
+  | "aguardando"
+  | "em_atendimento"
+  | "resolvida";
+
 export type ConversationLeadRow = {
   id: string;
   lead_id: string;
   last_message_at: string | null;
   unread_count: number | null;
+  status?: ConversationStatus | null;
   leads: { name: string | null; phone: string | null; whatsapp_lid?: string | null } | null;
 };
 

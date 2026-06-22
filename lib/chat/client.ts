@@ -22,7 +22,7 @@ export async function fetchConversationItems(tenantId: string): Promise<Conversa
   const [{ data: conversations, error }, { data: waAccount }] = await Promise.all([
     supabase
       .from("conversations")
-      .select("id, lead_id, last_message_at, unread_count, leads(name, phone, whatsapp_lid)")
+      .select("id, lead_id, last_message_at, unread_count, status, leads(name, phone, whatsapp_lid)")
       .eq("tenant_id", tenantId)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(100),

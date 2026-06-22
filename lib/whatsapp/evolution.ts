@@ -1,6 +1,7 @@
 import type { WhatsAppAccount } from "@/lib/supabase/database.types";
 import type {
   InboundNormalized,
+  SendMediaInput,
   SendMessageInput,
   SendMessageResult,
   SendTemplateInput,
@@ -30,6 +31,37 @@ export class EvolutionProvider implements WhatsAppProvider {
         number: input.to.replace(/\D/g, ""),
         text: input.body ?? "",
       }),
+    });
+    const data = (await res.json()) as { key?: { id?: string } };
+    if (!res.ok) return { externalId: "", status: "failed", raw: data };
+    return { externalId: data.key?.id ?? "", status: "sent", raw: data };
+  }
+
+  async sendMedia(input: SendMediaInput): Promise<SendMessageResult> {
+    const base = this.creds.base_url.replace(/\/$/, "");
+    const number = input.to.replace(/\D/g, "");
+    let url: string;
+    let payload: Record<string, unknown>;
+
+    if (input.mediaKind === "audio") {
+      url = `${base}/message/sendWhatsAppAudio/${this.creds.instance}`;
+      payload = { number, audio: input.mediaUrl };
+    } else {
+      url = `${base}/message/sendMedia/${this.creds.instance}`;
+      payload = {
+        number,
+        mediatype: input.mediaKind, // image | video | document
+        media: input.mediaUrl,
+        ...(input.caption ? { caption: input.caption } : {}),
+        ...(input.fileName ? { fileName: input.fileName } : {}),
+        ...(input.mimeType ? { mimetype: input.mimeType } : {}),
+      };
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { apikey: this.creds.api_key, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
     const data = (await res.json()) as { key?: { id?: string } };
     if (!res.ok) return { externalId: "", status: "failed", raw: data };

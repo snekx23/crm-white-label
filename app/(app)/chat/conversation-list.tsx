@@ -7,7 +7,8 @@ import { Search, Inbox, UsersRound, Plus, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, initials } from "@/lib/utils";
-import type { ConversationListItem, WhatsAppGroupListItem } from "@/lib/chat/types";
+import type { ConversationListItem, ConversationStatus, WhatsAppGroupListItem } from "@/lib/chat/types";
+import { CONVERSATION_STATUSES, STATUS_META } from "@/lib/chat/status";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import { addGroupLabel, removeGroupLabel } from "./actions";
 export type { ConversationListItem };
 
 type Tab = "contatos" | "grupos";
+type StatusFilter = ConversationStatus | "todas";
 type GroupDateFilter = "today" | "7d" | "30d" | "all";
 
 const groupDateFilters: { value: GroupDateFilter; label: string }[] = [
@@ -52,18 +54,32 @@ export function ConversationList({
   const activeGroupId = pathname.startsWith("/chat/groups/") ? (pathname.split("/")[3] ?? null) : null;
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("contatos");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("todas");
   const [groupDateFilter, setGroupDateFilter] = useState<GroupDateFilter>("all");
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<ConversationStatus, number> = {
+      nao_iniciada: 0,
+      aguardando: 0,
+      em_atendimento: 0,
+      resolvida: 0,
+    };
+    for (const c of items) counts[c.status] = (counts[c.status] ?? 0) + 1;
+    return counts;
+  }, [items]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (c) =>
+    return items.filter((c) => {
+      if (statusFilter !== "todas" && c.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
         c.leadName.toLowerCase().includes(q) ||
         c.leadSubtitle.toLowerCase().includes(q) ||
-        c.leadPhone.replace(/\D/g, "").includes(q.replace(/\D/g, "")),
-    );
-  }, [items, query]);
+        c.leadPhone.replace(/\D/g, "").includes(q.replace(/\D/g, ""))
+      );
+    });
+  }, [items, query, statusFilter]);
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -138,6 +154,38 @@ export function ConversationList({
             ))}
           </div>
         )}
+
+        {tab === "contatos" && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <StatusPill
+              active={statusFilter === "todas"}
+              onClick={() => setStatusFilter("todas")}
+              label="Todas"
+              count={items.length}
+            />
+            {CONVERSATION_STATUSES.map((s) => {
+              const Icon = s.icon;
+              const active = statusFilter === s.value;
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setStatusFilter(active ? "todas" : s.value)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? s.pill
+                      : "border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {s.short}
+                  <span className="tabular-nums opacity-70">{statusCounts[s.value]}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto">
@@ -166,15 +214,33 @@ export function ConversationList({
               href={`/chat/${c.leadId}`}
               prefetch
               className={cn(
-                "flex gap-3 border-b border-border/35 px-3 py-3 transition-colors duration-150 hover:bg-brand/10 dark:hover:bg-brand/15",
-                active && "border-l-2 border-l-brand bg-brand-muted dark:bg-brand/10",
+                "relative flex gap-3 border-b border-border/35 py-3 pl-4 pr-3 transition-colors duration-150 hover:bg-brand/10 dark:hover:bg-brand/15",
+                active && "bg-brand-muted dark:bg-brand/10",
               )}
             >
-              <Avatar className="h-11 w-11 shrink-0">
-                <AvatarFallback className="bg-brand-muted text-sm font-semibold text-brand dark:bg-brand dark:text-brand-foreground">
-                  {initials(c.leadName)}
-                </AvatarFallback>
-              </Avatar>
+              {/* Faixa de status na borda esquerda */}
+              <span
+                className={cn(
+                  "absolute inset-y-0 left-0 w-1",
+                  active ? "bg-brand" : STATUS_META[c.status].dot,
+                )}
+                aria-hidden
+              />
+              <div className="relative shrink-0">
+                <Avatar className="h-11 w-11">
+                  <AvatarFallback className="bg-brand-muted text-sm font-semibold text-brand dark:bg-brand dark:text-brand-foreground">
+                    {initials(c.leadName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span
+                  className={cn(
+                    "absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-card",
+                    STATUS_META[c.status].dot,
+                  )}
+                  title={STATUS_META[c.status].label}
+                  aria-hidden
+                />
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className={cn("truncate text-sm", c.unread > 0 ? "font-semibold" : "font-medium")}>
@@ -212,6 +278,34 @@ export function ConversationList({
         })}
       </div>
     </aside>
+  );
+}
+
+function StatusPill({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-brand/40 bg-brand/15 text-brand"
+          : "border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+      )}
+    >
+      {label}
+      <span className="tabular-nums opacity-70">{count}</span>
+    </button>
   );
 }
 

@@ -356,7 +356,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
 
       .from("conversations")
 
-      .select("id, unread_count")
+      .select("id, unread_count, status")
 
       .eq("tenant_id", account.tenant_id)
 
@@ -401,6 +401,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     } else {
 
       const unread = (existingConv as { unread_count?: number | null }).unread_count ?? 0;
+      const currentConvStatus = (existingConv as { status?: string | null }).status ?? "nao_iniciada";
+
+      // Transição de status no recebimento de mensagem do cliente
+      let nextStatus = currentConvStatus;
+      if (isInbound) {
+        if (currentConvStatus === "resolvida") nextStatus = "nao_iniciada";
+        else if (currentConvStatus === "aguardando") nextStatus = "em_atendimento";
+      } else {
+        nextStatus = "aguardando";
+      }
 
       await supabase
 
@@ -411,6 +421,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
           last_message_at: msg.timestamp,
 
           unread_count: isInbound ? unread + 1 : unread,
+
+          status: nextStatus,
 
         })
 
