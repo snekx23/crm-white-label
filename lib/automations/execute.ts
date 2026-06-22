@@ -301,33 +301,39 @@ export async function processExecution(
         }
         continue;
       } else if (kind === "ai") {
-        const apiKey = process.env.ANTHROPIC_API_KEY;
+        // Compatível com OpenAI Chat Completions (NVIDIA NIM, OpenAI, Groq, OpenRouter, Gemini...)
+        const apiKey = process.env.AI_API_KEY;
+        const baseUrl = (process.env.AI_BASE_URL ?? "https://integrate.api.nvidia.com/v1").replace(/\/$/, "");
+        const model = String(blockConfig.model ?? process.env.AI_MODEL ?? "meta/llama-3.3-70b-instruct");
         const prompt = interpolate(String(blockConfig.prompt ?? ""), lead);
         if (!apiKey) {
-          result = { skipped: "ANTHROPIC_API_KEY não configurada" };
+          result = { skipped: "AI_API_KEY não configurada" };
         } else if (!prompt) {
           result = { skipped: "prompt vazio" };
         } else {
-          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+          const resp = await fetch(`${baseUrl}/chat/completions`, {
             method: "POST",
             headers: {
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
+              authorization: `Bearer ${apiKey}`,
               "content-type": "application/json",
             },
             body: JSON.stringify({
-              model: "claude-haiku-4-5-20251001",
-              max_tokens: 512,
+              model,
               messages: [
                 {
                   role: "user",
                   content: `${prompt}\n\nDados do lead (JSON): ${JSON.stringify(lead)}`,
                 },
               ],
+              temperature: 0.2,
+              max_tokens: 512,
             }),
           });
-          const data = (await resp.json()) as { content?: { text?: string }[]; error?: { message?: string } };
-          const textOut = data?.content?.[0]?.text ?? "";
+          const data = (await resp.json()) as {
+            choices?: { message?: { content?: string } }[];
+            error?: { message?: string } | string;
+          };
+          const textOut = data?.choices?.[0]?.message?.content ?? "";
           if (leadId && textOut) {
             await supabase.from("lead_activities").insert({
               tenant_id: tenantId,
@@ -336,7 +342,8 @@ export async function processExecution(
               payload: { ai: textOut },
             });
           }
-          result = { ai_response: textOut.slice(0, 500), error: data?.error?.message };
+          const errMsg = typeof data?.error === "string" ? data.error : data?.error?.message;
+          result = { ai_response: textOut.slice(0, 500), error: errMsg };
         }
       } else if (kind === "javascript") {
         const code = String(blockConfig.code ?? "");

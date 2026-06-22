@@ -21,6 +21,8 @@
     "INSTAGRAM_WEBHOOK_VERIFY_TOKEN": "crm-instagram-verify-2026",
     "WHATSAPP_WEBHOOK_VERIFY_TOKEN": "crm-whatsapp-verify-2026",
     "META_APP_ID": "889382600118573",
-    "META_INSTAGRAM_APP_ID": "2090465588169558"
+    "META_INSTAGRAM_APP_ID": "2090465588169558",
+    "AI_BASE_URL": "https://integrate.api.nvidia.com/v1",
+    "AI_MODEL": "meta/llama-3.3-70b-instruct"
   }
 }

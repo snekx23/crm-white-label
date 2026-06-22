@@ -278,18 +278,31 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
 
         {/* ai */}
         {kind === "ai" && (
-          <div className="space-y-1.5">
-            <Label>Instrução para a IA</Label>
-            <Textarea
-              rows={4}
-              placeholder="Classifique o interesse do lead com base na última mensagem e retorne uma tag."
-              value={String(config.prompt ?? "")}
-              onChange={(e) => set("prompt", e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              A IA processa a conversa e pode definir tags, etapas ou respostas.
-            </p>
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <Label>Instrução para a IA</Label>
+              <Textarea
+                rows={4}
+                placeholder="Classifique o interesse do lead com base na última mensagem e retorne uma tag."
+                value={String(config.prompt ?? "")}
+                onChange={(e) => set("prompt", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                A IA recebe os dados do lead e processa segundo a instrução.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Modelo (opcional)</Label>
+              <Input
+                placeholder="meta/llama-3.3-70b-instruct"
+                value={String(config.model ?? "")}
+                onChange={(e) => set("model", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Deixe em branco para usar o modelo padrão configurado no servidor.
+              </p>
+            </div>
+          </>
         )}
 
         {/* javascript */}
