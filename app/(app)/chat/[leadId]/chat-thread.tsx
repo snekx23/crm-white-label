@@ -16,6 +16,8 @@ import {
   Mic,
   Trash2,
   FileIcon,
+  Bot,
+  BotOff,
 } from "lucide-react";
 import type { QuickMessage } from "@/lib/supabase/database.types";
 import { QuickRepliesPicker } from "@/components/chat/quick-replies-picker";
@@ -29,7 +31,13 @@ import { cn, initials } from "@/lib/utils";
 import { displayLeadName, displayLeadSubtitle } from "@/lib/leads/display";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LeadDeleteButton } from "@/components/leads/lead-delete-button";
-import { sendChatMessage, sendChatMedia, markConversationRead, setConversationStatusByLead } from "../actions";
+import {
+  sendChatMessage,
+  sendChatMedia,
+  markConversationRead,
+  setConversationStatusByLead,
+  setLeadAutomations,
+} from "../actions";
 
 type MediaKind = "image" | "video" | "audio" | "document";
 
@@ -68,6 +76,7 @@ export function ChatThread({
   leadPhone,
   conversationId: initialConversationId,
   initialStatus = "nao_iniciada",
+  initialAutomationsEnabled = true,
   initialMessages,
   quickMessages = [],
 }: {
@@ -77,6 +86,7 @@ export function ChatThread({
   leadPhone: string;
   conversationId: string | null;
   initialStatus?: ConversationStatus;
+  initialAutomationsEnabled?: boolean;
   initialMessages: ChatMessage[];
   quickMessages?: QuickMessage[];
 }) {
@@ -85,6 +95,7 @@ export function ChatThread({
 
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [status, setStatus] = useState<ConversationStatus>(initialStatus);
+  const [automationsOn, setAutomationsOn] = useState(initialAutomationsEnabled);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState("");
   const [pending, start] = useTransition();
@@ -135,10 +146,21 @@ export function ChatThread({
   useEffect(() => {
     setConversationId(initialConversationId);
     setStatus(initialStatus);
+    setAutomationsOn(initialAutomationsEnabled);
     setMessages(initialMessages);
     shouldStickToBottomRef.current = true;
     requestAnimationFrame(() => scrollToBottom("auto"));
-  }, [leadId, initialConversationId, initialStatus, initialMessages]);
+  }, [leadId, initialConversationId, initialStatus, initialAutomationsEnabled, initialMessages]);
+
+  const toggleAutomations = useCallback(() => {
+    setAutomationsOn((prev) => {
+      const next = !prev;
+      void setLeadAutomations({ leadId, enabled: next }).catch(() => {
+        /* mantém otimista */
+      });
+      return next;
+    });
+  }, [leadId]);
 
   const changeStatus = useCallback(
     (next: ConversationStatus) => {
@@ -354,6 +376,20 @@ export function ChatThread({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleAutomations}
+            title={automationsOn ? "Automações ligadas — clique para pausar" : "Automações pausadas — clique para ligar"}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+              automationsOn
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                : "border-border/60 text-muted-foreground hover:bg-muted/40",
+            )}
+          >
+            {automationsOn ? <Bot className="h-3.5 w-3.5" /> : <BotOff className="h-3.5 w-3.5" />}
+            {automationsOn ? "Automações" : "Pausadas"}
+          </button>
           <StatusSelector status={status} onChange={changeStatus} />
           <Button asChild variant="outline" size="sm" className="rounded-lg">
             <Link href={`/leads/${leadId}`} prefetch>

@@ -17,6 +17,16 @@ export async function fireAutomationTrigger(
   try {
     const supabase = createServiceClient();
 
+    // Respeita o desligamento de automações por lead (atendimento humano assume)
+    const { data: leadRow } = await supabase
+      .from("leads")
+      .select("automations_enabled")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (leadRow && (leadRow as { automations_enabled?: boolean }).automations_enabled === false) {
+      return;
+    }
+
     const { data: flows } = await supabase
       .from("automation_flows")
       .select("id")

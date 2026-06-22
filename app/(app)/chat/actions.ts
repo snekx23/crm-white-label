@@ -292,6 +292,18 @@ export async function sendChatMedia(input: {
   }
 }
 
+export async function setLeadAutomations(input: { leadId: string; enabled: boolean }) {
+  const ctx = await requireContext();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ automations_enabled: input.enabled })
+    .eq("id", input.leadId)
+    .eq("tenant_id", ctx.tenantId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/chat/${input.leadId}`);
+}
+
 export async function markConversationRead(conversationId: string) {
   const ctx = await requireContext();
   const supabase = await createClient();

@@ -13,12 +13,17 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ lea
 
   const leadRes = await supabase
     .from("leads")
-    .select("id, name, phone")
+    .select("id, name, phone, automations_enabled")
     .eq("id", leadId)
     .eq("tenant_id", ctx.tenantId)
     .single();
 
-  const lead = leadRes.data as { id: string; name: string; phone: string | null } | null;
+  const lead = leadRes.data as {
+    id: string;
+    name: string;
+    phone: string | null;
+    automations_enabled: boolean | null;
+  } | null;
   if (!lead) notFound();
 
   const convoRes = await supabase
@@ -59,6 +64,7 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ lea
       leadPhone={lead.phone ?? ""}
       conversationId={convo?.id ?? null}
       initialStatus={(convo?.status as ConversationStatus | null) ?? "nao_iniciada"}
+      initialAutomationsEnabled={lead.automations_enabled ?? true}
       initialMessages={messages}
       quickMessages={quickMessages}
     />

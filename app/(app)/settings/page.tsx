@@ -22,7 +22,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="mensagens-rapidas" className="scroll-mt-20">
         <CardHeader>
           <CardTitle>Mensagens rápidas</CardTitle>
           <CardDescription>

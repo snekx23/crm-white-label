@@ -150,6 +150,7 @@ export interface Lead {
   custom_fields: Record<string, unknown>;
   position: number;
   value_cents: number | null;
+  automations_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
