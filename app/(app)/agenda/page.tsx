@@ -5,9 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { canManageOperationalSetup } from "@/lib/auth/roles";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
-import { processAppointmentReminders } from "@/lib/agenda/reminders";
 import { createProfessional, createService, transitionAppointmentStatus } from "./actions";
 import { AppointmentDialog } from "./appointment-dialog";
 import { MeetingOutcomeDialog } from "./meeting-outcome-dialog";
@@ -29,10 +28,6 @@ export default async function AgendaPage({ searchParams }: { searchParams?: Prom
   const params = await searchParams;
   const day = /^\d{4}-\d{2}-\d{2}$/.test(params?.day ?? "") ? params!.day! : brtDay();
   const nextDay = offsetDay(day, 1);
-
-  // Dispara confirmações de reunião pendentes de forma oportunística
-  void processAppointmentReminders(createServiceClient()).catch(() => {});
-
   const supabase = await createClient();
   const [{ data: appointments }, { data: leads }, { data: professionals }, { data: services }] = await Promise.all([
     supabase
