@@ -10,6 +10,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/agenda": "Agenda",
   "/reunioes": "Reuniões",
   "/chat": "Conversas",
+  "/mensagens-rapidas": "Mensagens rápidas",
   "/estoque": "Estoque",
   "/integrations": "Integracoes",
   "/settings": "Configuracoes",

@@ -41,7 +41,7 @@ export function QuickRepliesPicker({
         <DropdownMenuLabel className="flex items-center justify-between">
           Mensagens rápidas
           <Link
-            href="/settings#mensagens-rapidas"
+            href="/mensagens-rapidas"
             className="inline-flex items-center gap-1 text-xs font-normal text-brand hover:underline"
             title="Organizar mensagens rápidas"
           >
@@ -54,7 +54,7 @@ export function QuickRepliesPicker({
           <div className="px-2 py-6 text-center">
             <p className="text-sm text-muted-foreground">Nenhuma mensagem rápida ainda.</p>
             <Button asChild variant="outline" size="sm" className="mt-3 rounded-lg">
-              <Link href="/settings#mensagens-rapidas">
+              <Link href="/mensagens-rapidas">
                 <Plus className="h-3.5 w-3.5" /> Criar mensagens
               </Link>
             </Button>

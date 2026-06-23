@@ -1,12 +1,11 @@
+import Link from "next/link";
+import { MessageSquareText, ArrowRight } from "lucide-react";
 import { requireContext } from "@/lib/tenant";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { QuickMessagesPanel } from "@/components/settings/quick-messages-panel";
-import { listQuickMessages } from "./quick-messages-actions";
 import { TenantForm } from "./tenant-form";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
-  const quickMessages = await listQuickMessages();
 
   return (
     <div className="space-y-6 p-6">
@@ -22,17 +21,22 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card id="mensagens-rapidas" className="scroll-mt-20">
-        <CardHeader>
-          <CardTitle>Mensagens rápidas</CardTitle>
-          <CardDescription>
-            Frases prontas para o time usar nas conversas do WhatsApp. Edite, crie ou adicione modelos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <QuickMessagesPanel initialMessages={quickMessages} />
-        </CardContent>
-      </Card>
+      <Link href="/mensagens-rapidas" prefetch>
+        <Card className="group transition-colors hover:border-brand/40">
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+              <MessageSquareText className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium">Mensagens rápidas</p>
+              <p className="text-sm text-muted-foreground">
+                Frases prontas para o time usar nas conversas do WhatsApp.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-brand" />
+          </CardContent>
+        </Card>
+      </Link>
     </div>
   );
 }

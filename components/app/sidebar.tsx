@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Users,
   MessageCircle,
+  MessageSquareText,
   BarChart3,
   Boxes,
   Settings,
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/reunioes", label: "Reuniões", icon: CalendarCheck },
   { href: "/chat", label: "Conversas", icon: MessageCircle },
+  { href: "/mensagens-rapidas", label: "Mensagens rápidas", icon: MessageSquareText },
   { href: "/estoque", label: "Estoque", icon: Boxes },
   { href: "/automations", label: "Automacoes", icon: Zap },
 ];
