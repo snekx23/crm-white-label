@@ -214,6 +214,32 @@ export function GroupChatThread({
     void uploadAndSend(file, file.name, detectMediaKind(file.type));
   }
 
+  async function sendExistingMedia(url: string, kind: MediaKind) {
+    setUploading(true);
+    const optimisticId = `opt-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: optimisticId, externalId: null, direction: "outbound", body: "", senderName: "Voce", senderJid: null, mediaUrl: url, mediaType: kind, createdAt: new Date().toISOString() },
+    ]);
+    try {
+      const sent = await sendGroupMedia({ groupId, mediaUrl: url, mediaKind: kind });
+      setMessages((prev) => uniqueMessages([...prev.filter((m) => m.id !== optimisticId), sent]));
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      alert((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function onPickQuick(m: { body: string | null; media_url: string | null; media_type: string | null }) {
+    if (m.media_url && m.media_type === "audio") {
+      void sendExistingMedia(m.media_url, "audio");
+    } else if (m.body) {
+      setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${m.body}` : m.body!));
+    }
+  }
+
   function openPicker(accept: string) {
     const input = fileInputRef.current;
     if (!input) return;
@@ -358,11 +384,7 @@ export function GroupChatThread({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <QuickRepliesPicker
-              messages={quickMessages}
-              disabled={busy}
-              onPick={(body) => setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${body}` : body))}
-            />
+            <QuickRepliesPicker messages={quickMessages} disabled={busy} onPick={onPickQuick} />
 
             <Textarea
               value={text}

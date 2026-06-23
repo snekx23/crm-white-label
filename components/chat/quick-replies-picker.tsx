@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Zap, Settings2, Plus } from "lucide-react";
+import { Zap, Settings2, Plus, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ export function QuickRepliesPicker({
   disabled,
 }: {
   messages: QuickMessage[];
-  onPick: (body: string) => void;
+  onPick: (message: QuickMessage) => void;
   disabled?: boolean;
 }) {
   return (
@@ -64,10 +64,15 @@ export function QuickRepliesPicker({
             <DropdownMenuItem
               key={m.id}
               className="flex cursor-pointer flex-col items-start gap-0.5 py-2"
-              onSelect={() => onPick(m.body)}
+              onSelect={() => onPick(m)}
             >
-              <span className="text-sm font-medium">{m.title}</span>
-              <span className="line-clamp-2 text-xs text-muted-foreground">{m.body}</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                {m.media_type === "audio" && <Mic className="h-3.5 w-3.5 text-brand" />}
+                {m.title}
+              </span>
+              <span className="line-clamp-2 text-xs text-muted-foreground">
+                {m.media_type === "audio" ? "🎤 Áudio pronto para enviar" : m.body}
+              </span>
             </DropdownMenuItem>
           ))
         )}

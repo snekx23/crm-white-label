@@ -70,7 +70,9 @@ export interface QuickMessage {
   id: string;
   tenant_id: string;
   title: string;
-  body: string;
+  body: string | null;
+  media_url: string | null;
+  media_type: string | null;
   sort_order: number;
   is_preset: boolean;
   created_at: string;

@@ -2,8 +2,10 @@ import { PageHeader } from "@/components/app/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { QuickMessagesPanel } from "@/components/settings/quick-messages-panel";
 import { listQuickMessages } from "../settings/quick-messages-actions";
+import { requireContext } from "@/lib/tenant";
 
 export default async function MensagensRapidasPage() {
+  const ctx = await requireContext();
   const quickMessages = await listQuickMessages();
 
   return (
@@ -16,7 +18,7 @@ export default async function MensagensRapidasPage() {
       <div className="p-6">
         <Card>
           <CardContent className="p-6">
-            <QuickMessagesPanel initialMessages={quickMessages} />
+            <QuickMessagesPanel initialMessages={quickMessages} tenantId={ctx.tenantId} />
           </CardContent>
         </Card>
       </div>

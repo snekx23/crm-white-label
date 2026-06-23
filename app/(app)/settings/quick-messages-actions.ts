@@ -37,11 +37,18 @@ export async function listQuickMessages(): Promise<QuickMessage[]> {
   return ensureQuickMessagesSeeded();
 }
 
-export async function createQuickMessage(input: { title: string; body: string }) {
+export async function createQuickMessage(input: {
+  title: string;
+  body?: string;
+  media_url?: string;
+  media_type?: string;
+}) {
   const ctx = await requireContext();
   const title = input.title.trim();
-  const body = input.body.trim();
-  if (!title || !body) throw new Error("Titulo e mensagem sao obrigatorios");
+  const body = (input.body ?? "").trim();
+  const mediaUrl = input.media_url?.trim() || null;
+  if (!title) throw new Error("Titulo e obrigatorio");
+  if (!body && !mediaUrl) throw new Error("Informe uma mensagem ou um audio");
 
   const supabase = await createClient();
   const { count } = await supabase
@@ -53,12 +60,14 @@ export async function createQuickMessage(input: { title: string; body: string })
   const { error } = await supabase.from("quick_messages").insert({
     tenant_id: ctx.tenantId,
     title,
-    body,
+    body: body || null,
+    media_url: mediaUrl,
+    media_type: mediaUrl ? input.media_type ?? "audio" : null,
     sort_order: sortOrder,
     is_preset: false,
   });
   if (error) throw new Error(error.message);
-  revalidatePath("/settings");
+  revalidatePath("/mensagens-rapidas");
   revalidatePath("/chat", "layout");
 }
 
@@ -67,19 +76,19 @@ export async function updateQuickMessage(input: {
   title: string;
   body: string;
 }) {
-  await requireContext();
+  const ctx = await requireContext();
   const title = input.title.trim();
   const body = input.body.trim();
-  if (!title || !body) throw new Error("Titulo e mensagem sao obrigatorios");
+  if (!title) throw new Error("Titulo e obrigatorio");
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("quick_messages")
-    .update({ title, body, updated_at: new Date().toISOString() })
+    .update({ title, body: body || null, updated_at: new Date().toISOString() })
     .eq("id", input.id)
     .eq("tenant_id", ctx.tenantId);
   if (error) throw new Error(error.message);
-  revalidatePath("/settings");
+  revalidatePath("/mensagens-rapidas");
   revalidatePath("/chat", "layout");
 }
 

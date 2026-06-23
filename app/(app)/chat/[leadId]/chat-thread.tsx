@@ -347,6 +347,35 @@ export function ChatThread({
     void uploadAndSend(file, file.name, detectMediaKind(file.type));
   }
 
+  async function sendExistingMedia(url: string, kind: MediaKind) {
+    setUploading(true);
+    shouldStickToBottomRef.current = true;
+    const optimisticId = `opt-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: optimisticId, body: "", direction: "outbound", created_at: new Date().toISOString(), status: "pending", media_url: url, media_type: kind },
+    ]);
+    setStatus("aguardando");
+    try {
+      const result = await sendChatMedia({ leadId, mediaUrl: url, mediaKind: kind });
+      if (!conversationId) setConversationId(result.conversationId);
+      setMessages((prev) => mergeMessages(prev.filter((m) => m.id !== optimisticId), [result.message]));
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      alert((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function onPickQuick(m: { body: string | null; media_url: string | null; media_type: string | null }) {
+    if (m.media_url && m.media_type === "audio") {
+      void sendExistingMedia(m.media_url, "audio");
+    } else if (m.body) {
+      setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${m.body}` : m.body!));
+    }
+  }
+
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -596,11 +625,7 @@ export function ChatThread({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <QuickRepliesPicker
-              messages={quickMessages}
-              disabled={busy}
-              onPick={(body) => setText((prev) => (prev.trim() ? `${prev.trim()}\n\n${body}` : body))}
-            />
+            <QuickRepliesPicker messages={quickMessages} disabled={busy} onPick={onPickQuick} />
 
             {/* Agendar mensagem (atalho direto) */}
             <Button

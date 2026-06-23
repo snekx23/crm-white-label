@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -16,7 +16,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Loader2, Pencil, Plus, Trash2, Sparkles } from "lucide-react";
+import { GripVertical, Loader2, Pencil, Plus, Trash2, Sparkles, Mic, Square, RotateCcw } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,13 @@ import {
   reorderQuickMessages,
 } from "@/app/(app)/settings/quick-messages-actions";
 
-export function QuickMessagesPanel({ initialMessages }: { initialMessages: QuickMessage[] }) {
+export function QuickMessagesPanel({
+  initialMessages,
+  tenantId,
+}: {
+  initialMessages: QuickMessage[];
+  tenantId: string;
+}) {
   const [messages, setMessages] = useState(initialMessages);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -47,6 +54,85 @@ export function QuickMessagesPanel({ initialMessages }: { initialMessages: Quick
   const [editing, setEditing] = useState<QuickMessage | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+
+  // Áudio
+  const [audioOpen, setAudioOpen] = useState(false);
+  const [audioTitle, setAudioTitle] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [savingAudio, setSavingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function openAudio() {
+    setAudioTitle("");
+    setAudioBlob(null);
+    setAudioPreview(null);
+    setRecordSecs(0);
+    setAudioOpen(true);
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recordChunksRef.current = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) recordChunksRef.current.push(ev.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordChunksRef.current, { type: "audio/ogg" });
+        setAudioBlob(blob);
+        setAudioPreview(URL.createObjectURL(blob));
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setRecording(true);
+      setRecordSecs(0);
+      recordTimerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+    } catch {
+      setMsg("Não foi possível acessar o microfone.");
+    }
+  }
+
+  function stopRecording() {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    setRecording(false);
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+  }
+
+  function resetAudio() {
+    setAudioBlob(null);
+    setAudioPreview(null);
+    setRecordSecs(0);
+  }
+
+  function onSaveAudio() {
+    if (!audioBlob || !audioTitle.trim()) return;
+    setSavingAudio(true);
+    setMsg(null);
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const path = `${tenantId}/quick-audio/${crypto.randomUUID()}.ogg`;
+        const { error: upErr } = await supabase.storage
+          .from("chat-media")
+          .upload(path, audioBlob, { cacheControl: "3600", upsert: false, contentType: "audio/ogg" });
+        if (upErr) throw new Error(upErr.message);
+        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+        await createQuickMessage({ title: audioTitle.trim(), media_url: pub.publicUrl, media_type: "audio" });
+        window.location.reload();
+      } catch (e) {
+        setMsg((e as Error).message);
+        setSavingAudio(false);
+      }
+    })();
+  }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -67,7 +153,7 @@ export function QuickMessagesPanel({ initialMessages }: { initialMessages: Quick
   function openEdit(m: QuickMessage) {
     setEditing(m);
     setTitle(m.title);
-    setBody(m.body);
+    setBody(m.body ?? "");
     setEditorOpen(true);
   }
 
@@ -182,12 +268,80 @@ export function QuickMessagesPanel({ initialMessages }: { initialMessages: Quick
         </SortableContext>
       </DndContext>
 
-      <Button type="button" variant="outline" onClick={openCreate}>
-        <Plus className="h-4 w-4" />
-        Nova mensagem
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          Nova mensagem
+        </Button>
+        <Button type="button" variant="outline" onClick={openAudio}>
+          <Mic className="h-4 w-4" />
+          Novo áudio
+        </Button>
+      </div>
 
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+
+      {/* Dialog de áudio */}
+      <Dialog open={audioOpen} onOpenChange={(o) => { if (!savingAudio) setAudioOpen(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mic className="h-5 w-5 text-brand" />
+              Novo áudio rápido
+            </DialogTitle>
+            <DialogDescription>
+              Grave um áudio pronto para enviar com um clique nas conversas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="qm-audio-title">Título</Label>
+              <Input
+                id="qm-audio-title"
+                value={audioTitle}
+                onChange={(e) => setAudioTitle(e.target.value)}
+                placeholder="Ex.: Áudio de boas-vindas"
+              />
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+              {!audioPreview ? (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  {recording ? (
+                    <>
+                      <span className="font-mono text-lg font-semibold text-red-600 dark:text-red-400">
+                        {Math.floor(recordSecs / 60)}:{(recordSecs % 60).toString().padStart(2, "0")}
+                      </span>
+                      <Button type="button" variant="destructive" onClick={stopRecording}>
+                        <Square className="h-4 w-4" /> Parar gravação
+                      </Button>
+                    </>
+                  ) : (
+                    <Button type="button" variant="brand" onClick={startRecording}>
+                      <Mic className="h-4 w-4" /> Iniciar gravação
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <audio controls src={audioPreview} className="w-full" />
+                  <Button type="button" variant="outline" size="sm" onClick={resetAudio}>
+                    <RotateCcw className="h-3.5 w-3.5" /> Regravar
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setAudioOpen(false)} disabled={savingAudio}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="brand" onClick={onSaveAudio} disabled={savingAudio || !audioBlob || !audioTitle.trim()}>
+              {savingAudio ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar áudio"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
         <DialogContent>
@@ -270,8 +424,15 @@ function SortableRow({
         <GripVertical className="h-4 w-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">{message.title}</p>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</p>
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          {message.media_type === "audio" && <Mic className="h-3.5 w-3.5 text-brand" />}
+          {message.title}
+        </p>
+        {message.media_url && message.media_type === "audio" ? (
+          <audio controls src={message.media_url} className="mt-2 h-9 w-full max-w-xs" />
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</p>
+        )}
       </div>
       <div className="flex shrink-0 gap-1">
         <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit} disabled={disabled}>
