@@ -21,7 +21,9 @@ import {
   CalendarClock,
   Image as ImageIcon,
   FileText,
+  Pencil,
 } from "lucide-react";
+import { updateLead } from "@/app/(app)/leads/actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,8 +112,36 @@ export function ChatThread({
   initialMessages: ChatMessage[];
   quickMessages?: QuickMessage[];
 }) {
-  const displayName = displayLeadName(leadName, leadPhone);
   const displayPhone = displayLeadSubtitle(leadPhone);
+  const [displayName, setDisplayName] = useState(displayLeadName(leadName, leadPhone));
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  useEffect(() => {
+    setDisplayName(displayLeadName(leadName, leadPhone));
+  }, [leadName, leadPhone]);
+
+  function openRename() {
+    setRenameValue(displayName);
+    setRenameOpen(true);
+  }
+
+  function submitRename() {
+    const next = renameValue.trim();
+    if (!next || next === displayName) {
+      setRenameOpen(false);
+      return;
+    }
+    setRenaming(true);
+    void updateLead(leadId, { name: next })
+      .then(() => {
+        setDisplayName(next);
+        setRenameOpen(false);
+      })
+      .catch((err) => alert((err as Error).message))
+      .finally(() => setRenaming(false));
+  }
 
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [status, setStatus] = useState<ConversationStatus>(initialStatus);
@@ -454,7 +484,15 @@ export function ChatThread({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate font-display text-base font-semibold tracking-normal">{displayName}</p>
+            <button
+              type="button"
+              onClick={openRename}
+              className="group flex max-w-full items-center gap-1.5 text-left"
+              title="Renomear contato"
+            >
+              <span className="truncate font-display text-base font-semibold tracking-normal">{displayName}</span>
+              <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
             <p className="truncate text-xs text-muted-foreground">{displayPhone}</p>
           </div>
         </div>
@@ -679,6 +717,43 @@ export function ChatThread({
           </form>
         )}
       </div>
+
+      {/* Dialog de renomear contato */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-brand" />
+              Renomear contato
+            </DialogTitle>
+            <DialogDescription>Altere o nome exibido deste cliente no CRM.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="rename-input">Nome</Label>
+            <Input
+              id="rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Nome do cliente"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitRename();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)} disabled={renaming}>
+              Cancelar
+            </Button>
+            <Button variant="brand" onClick={submitRename} disabled={renaming || !renameValue.trim()}>
+              {renaming ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de agendamento de mensagem */}
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
