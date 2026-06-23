@@ -89,6 +89,44 @@ export async function transitionAppointmentStatus(formData: FormData) {
   refreshAgenda();
 }
 
+export async function setMeetingOutcome(formData: FormData) {
+  const ctx = await requireContext();
+  assertRole(ctx.role, canOperateLead);
+  const id = uuid.parse(formData.get("id"));
+  const outcome = z
+    .enum(["pending", "no_show", "done", "closed_on_call", "closed_later"])
+    .parse(formData.get("outcome"));
+  const dealValue = Number(formData.get("deal_value") ?? 0);
+  const cost = Number(formData.get("cost") ?? 0);
+
+  const isClose = outcome === "closed_on_call" || outcome === "closed_later";
+  const newStatus =
+    outcome === "no_show" ? "no_show" : outcome === "pending" ? "scheduled" : "completed";
+
+  const update: Record<string, unknown> = {
+    outcome,
+    status: newStatus,
+    cost_cents: Number.isFinite(cost) ? Math.round(cost * 100) : 0,
+  };
+  if (isClose) {
+    update.deal_value_cents = Number.isFinite(dealValue) ? Math.round(dealValue * 100) : 0;
+    update.closed_at = new Date().toISOString();
+  } else {
+    update.deal_value_cents = 0;
+    update.closed_at = null;
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("appointments")
+    .update(update)
+    .eq("id", id)
+    .eq("tenant_id", ctx.tenantId);
+  if (error) throw new Error(error.message);
+  refreshAgenda();
+  revalidatePath("/reunioes");
+}
+
 export async function createProfessional(formData: FormData) {
   const ctx = await requireContext();
   assertRole(ctx.role, canManageOperationalSetup);

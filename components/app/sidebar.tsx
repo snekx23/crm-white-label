@@ -14,6 +14,7 @@ import {
   Plug,
   GitBranch,
   CalendarDays,
+  CalendarCheck,
   Zap,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/kanban", label: "Kanban", icon: KanbanSquare },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
+  { href: "/reunioes", label: "Reuniões", icon: CalendarCheck },
   { href: "/disparos", label: "Disparos", icon: Send },
   { href: "/chat", label: "Conversas", icon: MessageCircle },
   { href: "/estoque", label: "Estoque", icon: Boxes },

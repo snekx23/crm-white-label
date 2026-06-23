@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { canManageOperationalSetup } from "@/lib/auth/roles";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
+import { processAppointmentReminders } from "@/lib/agenda/reminders";
 import { createProfessional, createService, transitionAppointmentStatus } from "./actions";
 import { AppointmentDialog } from "./appointment-dialog";
+import { MeetingOutcomeDialog } from "./meeting-outcome-dialog";
 
 const statusLabel = { scheduled: "Agendado", confirmed: "Confirmado", completed: "Concluido", cancelled: "Cancelado", no_show: "Nao compareceu" };
 
@@ -27,11 +29,15 @@ export default async function AgendaPage({ searchParams }: { searchParams?: Prom
   const params = await searchParams;
   const day = /^\d{4}-\d{2}-\d{2}$/.test(params?.day ?? "") ? params!.day! : brtDay();
   const nextDay = offsetDay(day, 1);
+
+  // Dispara confirmações de reunião pendentes de forma oportunística
+  void processAppointmentReminders(createServiceClient()).catch(() => {});
+
   const supabase = await createClient();
   const [{ data: appointments }, { data: leads }, { data: professionals }, { data: services }] = await Promise.all([
     supabase
       .from("appointments")
-      .select("id, starts_at, duration_minutes, status, notes, leads(id, name), professionals(name), services(name)")
+      .select("id, starts_at, duration_minutes, status, outcome, notes, leads(id, name), professionals(name), services(name)")
       .eq("tenant_id", ctx.tenantId)
       .gte("starts_at", `${day}T00:00:00-03:00`)
       .lt("starts_at", `${nextDay}T00:00:00-03:00`)
@@ -77,8 +83,11 @@ export default async function AgendaPage({ searchParams }: { searchParams?: Prom
                 </Badge>
                 <div className="flex gap-1">
                   {appointment.status === "scheduled" && <StatusButton id={appointment.id} status="confirmed" title="Confirmar"><Check className="h-4 w-4" /></StatusButton>}
-                  {appointment.status === "confirmed" && <StatusButton id={appointment.id} status="completed" title="Concluir"><CheckCircle2 className="h-4 w-4" /></StatusButton>}
-                  {(appointment.status === "scheduled" || appointment.status === "confirmed") && <StatusButton id={appointment.id} status="no_show" title="Nao compareceu"><UserX className="h-4 w-4" /></StatusButton>}
+                  <MeetingOutcomeDialog
+                    appointmentId={appointment.id}
+                    leadName={lead?.name ?? "Cliente"}
+                    currentOutcome={(appointment as { outcome?: string | null }).outcome ?? null}
+                  />
                   {(appointment.status === "scheduled" || appointment.status === "confirmed") && <StatusButton id={appointment.id} status="cancelled" title="Cancelar"><X className="h-4 w-4" /></StatusButton>}
                 </div>
               </div>
