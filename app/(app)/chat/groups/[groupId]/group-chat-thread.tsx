@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Send, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { sendGroupMessage } from "../../actions";
+import { sendGroupMessage, fetchGroupMessages } from "../../actions";
+
+const POLL_MS = 8_000;
 
 export type GroupThreadMessage = {
   id: string;
@@ -61,6 +63,37 @@ export function GroupChatThread({
   const [pending, start] = useTransition();
 
   const sortedMessages = useMemo(() => uniqueMessages(messages), [messages]);
+
+  // Recarrega ao trocar de grupo
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [groupId, initialMessages]);
+
+  const sync = useCallback(async () => {
+    try {
+      const next = await fetchGroupMessages(groupId);
+      setMessages((prev) => {
+        // Mantém mensagens otimistas (id começa com "opt-") que ainda não voltaram
+        const optimistic = prev.filter((m) => m.id.startsWith("opt-"));
+        return uniqueMessages([...next, ...optimistic]);
+      });
+    } catch {
+      /* mantém estado atual */
+    }
+  }, [groupId]);
+
+  // Polling + refresh ao focar a aba
+  useEffect(() => {
+    const timer = setInterval(() => void sync(), POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [sync]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();

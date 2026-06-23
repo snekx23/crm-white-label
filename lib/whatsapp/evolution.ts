@@ -37,6 +37,29 @@ export class EvolutionProvider implements WhatsAppProvider {
     return { externalId: data.key?.id ?? "", status: "sent", raw: data };
   }
 
+  /** Configura o webhook da instância apontando para o CRM (eventos de mensagem e grupo). */
+  async configureWebhook(webhookUrl: string): Promise<void> {
+    const base = this.creds.base_url.replace(/\/$/, "");
+    const url = `${base}/webhook/set/${encodeURIComponent(this.creds.instance)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { apikey: this.creds.api_key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        webhook: {
+          enabled: true,
+          url: webhookUrl,
+          webhookByEvents: false,
+          base64: false,
+          events: ["MESSAGES_UPSERT", "GROUPS_UPSERT", "GROUP_PARTICIPANTS_UPDATE", "CONNECTION_UPDATE"],
+        },
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.text().catch(() => "");
+      throw new Error(`Falha ao configurar webhook Evolution (HTTP ${res.status}): ${data.slice(0, 200)}`);
+    }
+  }
+
   async sendMedia(input: SendMediaInput): Promise<SendMessageResult> {
     const base = this.creds.base_url.replace(/\/$/, "");
     const number = input.to.replace(/\D/g, "");

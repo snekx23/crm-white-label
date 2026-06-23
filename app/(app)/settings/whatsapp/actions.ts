@@ -44,6 +44,27 @@ async function syncZapiWebhooks(
   input.credentials.zapi_received_callback_url = me.receivedCallbackUrl ?? null;
 }
 
+async function syncEvolutionWebhook(input: {
+  provider: WhatsAppProviderKind;
+  credentials: Record<string, unknown>;
+}) {
+  if (input.provider !== "evolution") return;
+  try {
+    const { EvolutionProvider } = await import("@/lib/whatsapp/evolution");
+    const base = await getAppBaseUrl();
+    const fakeAccount = {
+      provider: "evolution" as const,
+      credentials: input.credentials,
+    } as WhatsAppAccount;
+    const evo = new EvolutionProvider(fakeAccount);
+    await evo.configureWebhook(`${base}/api/webhooks/whatsapp/evolution`);
+    input.credentials.webhooks_synced_at = new Date().toISOString();
+  } catch (err) {
+    // Não bloqueia o salvamento se a instância estiver fora do ar
+    console.error("[evolution] configure webhook falhou", err);
+  }
+}
+
 export async function saveWhatsAppAccount(input: {
   id?: string;
   provider: WhatsAppProviderKind;
@@ -58,6 +79,7 @@ export async function saveWhatsAppAccount(input: {
 
   if (input.is_active) {
     await syncZapiWebhooks(input, ctx.tenantId);
+    await syncEvolutionWebhook(input);
   }
 
   if (input.id) {

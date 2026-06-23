@@ -410,6 +410,58 @@ export async function setConversationStatusByLead(input: { leadId: string; statu
   revalidatePath("/chat");
 }
 
+export async function fetchGroupMessages(groupId: string): Promise<
+  {
+    id: string;
+    externalId: string | null;
+    direction: "inbound" | "outbound";
+    body: string;
+    senderName: string | null;
+    senderJid: string | null;
+    createdAt: string;
+  }[]
+> {
+  const ctx = await requireContext();
+  const supabase = createServiceClient();
+
+  const { data: group } = await supabase
+    .from("whatsapp_groups")
+    .select("provider_group_id")
+    .eq("id", groupId)
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+  if (!group) return [];
+
+  const { data: logs } = await supabase
+    .from("whatsapp_webhook_logs")
+    .select("id, from_me, payload, created_at")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("event_type", "GROUP_MESSAGE")
+    .eq("contact_lid", (group as { provider_group_id: string }).provider_group_id)
+    .order("created_at", { ascending: true })
+    .limit(500);
+
+  const txt = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+
+  return (logs ?? []).map((log) => {
+    const p = (log.payload && typeof log.payload === "object" && !Array.isArray(log.payload)
+      ? log.payload
+      : {}) as Record<string, unknown>;
+    return {
+      id: log.id as string,
+      externalId: txt(p.external_id),
+      direction: (p.direction === "outbound" || log.from_me ? "outbound" : "inbound") as
+        | "inbound"
+        | "outbound",
+      body: txt(p.body) ?? "",
+      senderName: txt(p.sender_name),
+      senderJid: txt(p.sender_jid),
+      createdAt: txt(p.message_at) ?? (log.created_at as string),
+    };
+  });
+}
+
 export async function addGroupLabel(input: { groupId: string; name: string }) {
   const ctx = await requireContext();
   const supabase = createServiceClient();
