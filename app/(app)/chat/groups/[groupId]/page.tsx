@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
+import { listQuickMessages } from "@/app/(app)/settings/quick-messages-actions";
 import { GroupChatThread, type GroupThreadMessage } from "./group-chat-thread";
 
 function payloadRecord(value: unknown): Record<string, unknown> {
@@ -58,17 +59,23 @@ export default async function GroupChatPage({ params }: { params: Promise<{ grou
       body: readText(payload.body) ?? "",
       senderName: readText(payload.sender_name),
       senderJid: readText(payload.sender_jid),
+      mediaUrl: readText(payload.media_url),
+      mediaType: readText(payload.media_type),
       createdAt: readText(payload.message_at) ?? log.created_at,
     };
   });
 
+  const quickMessages = await listQuickMessages();
+
   return (
     <GroupChatThread
       groupId={group.id}
+      tenantId={ctx.tenantId}
       subject={group.subject}
       participantCount={group.participant_count}
       labels={labels}
       initialMessages={messages}
+      quickMessages={quickMessages}
     />
   );
 }

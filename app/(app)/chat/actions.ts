@@ -418,6 +418,8 @@ export async function fetchGroupMessages(groupId: string): Promise<
     body: string;
     senderName: string | null;
     senderJid: string | null;
+    mediaUrl: string | null;
+    mediaType: string | null;
     createdAt: string;
   }[]
 > {
@@ -457,6 +459,8 @@ export async function fetchGroupMessages(groupId: string): Promise<
       body: txt(p.body) ?? "",
       senderName: txt(p.sender_name),
       senderJid: txt(p.sender_jid),
+      mediaUrl: txt(p.media_url),
+      mediaType: txt(p.media_type),
       createdAt: txt(p.message_at) ?? (log.created_at as string),
     };
   });
@@ -534,6 +538,128 @@ function evolutionErrorMessage(raw: unknown): string {
     }
   }
   return "Falha ao enviar mensagem no grupo";
+}
+
+async function sendEvolutionGroupMedia(
+  account: WhatsAppAccount,
+  groupJid: string,
+  input: { mediaUrl: string; mediaKind: "image" | "video" | "audio" | "document"; caption?: string; fileName?: string; mimeType?: string },
+) {
+  const credentials = account.credentials as { base_url?: string; api_key?: string; instance?: string };
+  const baseUrl = credentials.base_url?.replace(/\/$/, "");
+  const apiKey = credentials.api_key;
+  const instance = credentials.instance;
+  if (!baseUrl || !apiKey || !instance) throw new Error("Credenciais Evolution incompletas");
+
+  let url: string;
+  let payload: Record<string, unknown>;
+  if (input.mediaKind === "audio") {
+    url = `${baseUrl}/message/sendWhatsAppAudio/${encodeURIComponent(instance)}`;
+    payload = { number: groupJid, audio: input.mediaUrl };
+  } else {
+    url = `${baseUrl}/message/sendMedia/${encodeURIComponent(instance)}`;
+    payload = {
+      number: groupJid,
+      mediatype: input.mediaKind,
+      media: input.mediaUrl,
+      ...(input.caption ? { caption: input.caption } : {}),
+      ...(input.fileName ? { fileName: input.fileName } : {}),
+      ...(input.mimeType ? { mimetype: input.mimeType } : {}),
+    };
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { apikey: apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let raw: unknown = text;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    /* keep raw */
+  }
+  if (!res.ok) throw new Error(evolutionErrorMessage(raw));
+  return raw as { key?: { id?: string }; messageTimestamp?: string | number };
+}
+
+export async function sendGroupMedia(input: {
+  groupId: string;
+  mediaUrl: string;
+  mediaKind: "image" | "video" | "audio" | "document";
+  fileName?: string;
+  mimeType?: string;
+  caption?: string;
+}) {
+  const ctx = await requireContext();
+  const supabase = createServiceClient();
+  if (!input.mediaUrl) throw new Error("Mídia ausente");
+
+  const { data: group } = await supabase
+    .from("whatsapp_groups")
+    .select("id, provider_group_id")
+    .eq("id", input.groupId)
+    .eq("tenant_id", ctx.tenantId)
+    .single();
+  if (!group) throw new Error("Grupo nao encontrado");
+
+  const { data: account } = await supabase
+    .from("whatsapp_accounts")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("provider", "evolution")
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+  if (!account) throw new Error("Conta Evolution nao configurada");
+
+  const raw = await sendEvolutionGroupMedia(account as WhatsAppAccount, group.provider_group_id, input);
+  const externalId = raw.key?.id ?? `group-media-${Date.now()}`;
+  const messageAt = raw.messageTimestamp
+    ? new Date(Number(raw.messageTimestamp) * 1000).toISOString()
+    : new Date().toISOString();
+
+  const previewBody =
+    input.caption?.trim() ||
+    (input.mediaKind === "image" ? "📷 Imagem" : input.mediaKind === "video" ? "🎬 Vídeo" : input.mediaKind === "audio" ? "🎤 Áudio" : `📎 ${input.fileName ?? "Documento"}`);
+
+  const { data: inserted } = await supabase
+    .from("whatsapp_webhook_logs")
+    .insert({
+      tenant_id: ctx.tenantId,
+      whatsapp_account_id: account.id,
+      event_type: "GROUP_MESSAGE",
+      from_me: true,
+      contact_lid: group.provider_group_id,
+      parsed_count: 1,
+      payload: {
+        external_id: externalId,
+        provider_group_id: group.provider_group_id,
+        sender_name: account.display_name ?? "Voce",
+        direction: "outbound",
+        body: previewBody,
+        media_url: input.mediaUrl,
+        media_type: input.mediaKind,
+        message_at: messageAt,
+      },
+    })
+    .select("id")
+    .single();
+
+  revalidatePath(`/chat/groups/${input.groupId}`);
+
+  return {
+    id: inserted?.id ?? externalId,
+    externalId,
+    direction: "outbound" as const,
+    body: previewBody,
+    senderName: account.display_name ?? "Voce",
+    senderJid: null,
+    mediaUrl: input.mediaUrl,
+    mediaType: input.mediaKind,
+    createdAt: messageAt,
+  };
 }
 
 async function sendEvolutionGroupText(account: WhatsAppAccount, groupJid: string, body: string) {
