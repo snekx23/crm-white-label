@@ -32,7 +32,7 @@ export default async function IntegrationsPage() {
       key: "whatsapp",
       title: "WhatsApp",
       description:
-        "Atenda e venda pelo WhatsApp com chat ao vivo, envio de mídia e disparos. Cloud API oficial, Evolution ou Z-API.",
+        "Atenda e venda pelo WhatsApp com chat ao vivo e envio de mídia. Cloud API oficial, Evolution ou Z-API.",
       icon: MessageCircle,
       href: "/integrations/whatsapp",
       status: wppOn,
