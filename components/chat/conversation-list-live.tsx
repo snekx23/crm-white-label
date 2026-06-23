@@ -35,9 +35,10 @@ export function ConversationListLive({
     }
   }, [tenantId]);
 
+  // Debounce maior: grupos ativos geram muitos eventos de realtime; coalesce as rajadas.
   const scheduleRefresh = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => void refresh(), 400);
+    refreshTimerRef.current = setTimeout(() => void refresh(), 2500);
   }, [refresh]);
 
   useEffect(() => {

@@ -647,6 +647,11 @@ export async function sendGroupMedia(input: {
     .select("id")
     .single();
 
+  await supabase
+    .from("whatsapp_groups")
+    .update({ last_message_body: previewBody, last_message_direction: "outbound", last_message_at: messageAt, last_event_at: messageAt })
+    .eq("id", group.id);
+
   revalidatePath(`/chat/groups/${input.groupId}`);
 
   return {
@@ -749,6 +754,11 @@ export async function sendGroupMessage(input: { groupId: string; body: string })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+
+  await supabase
+    .from("whatsapp_groups")
+    .update({ last_message_body: body, last_message_direction: "outbound", last_message_at: messageAt, last_event_at: messageAt })
+    .eq("id", group.id);
 
   revalidatePath(`/chat/groups/${input.groupId}`);
   revalidatePath("/chat");

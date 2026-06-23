@@ -181,6 +181,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       if (error) {
         return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
       }
+
+      // Desnormaliza a última mensagem por grupo (preview rápido na lista)
+      const latestByGroup = new Map<string, { body: string; direction: string; message_at: string }>();
+      for (const m of groupMessages) {
+        const prev = latestByGroup.get(m.provider_group_id);
+        if (!prev || Date.parse(m.message_at) >= Date.parse(prev.message_at)) {
+          latestByGroup.set(m.provider_group_id, { body: m.body, direction: m.direction, message_at: m.message_at });
+        }
+      }
+      await Promise.all(
+        [...latestByGroup.entries()].map(([groupJid, last]) =>
+          supabase
+            .from("whatsapp_groups")
+            .update({
+              last_message_body: last.body,
+              last_message_direction: last.direction,
+              last_message_at: last.message_at,
+              last_event_at: last.message_at,
+            })
+            .eq("tenant_id", account.tenant_id)
+            .eq("provider_group_id", groupJid),
+        ),
+      );
+
       return NextResponse.json({ ok: true, parsed: groupMessages.length, kind: "group_messages" });
     }
 

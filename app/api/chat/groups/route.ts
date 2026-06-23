@@ -11,10 +11,12 @@ export async function GET() {
 
   const { data: groups, error } = await supabase
     .from("whatsapp_groups")
-    .select("id, provider_group_id, subject, description, participant_count, last_event_type, last_event_at, updated_at")
+    .select(
+      "id, provider_group_id, subject, description, participant_count, last_event_type, last_event_at, updated_at, last_message_body, last_message_direction, last_message_at",
+    )
     .eq("tenant_id", ctx.tenantId)
-    .order("last_event_at", { ascending: false, nullsFirst: false })
-    .limit(500);
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(200);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -34,17 +36,5 @@ export async function GET() {
     assignments = (data ?? []) as typeof assignments;
   }
 
-  const { data: messageLogs, error: logsError } = await supabase
-    .from("whatsapp_webhook_logs")
-    .select("contact_lid, from_me, payload, created_at")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("event_type", "GROUP_MESSAGE")
-    .order("created_at", { ascending: false })
-    .limit(1000);
-
-  if (logsError) return NextResponse.json({ error: logsError.message }, { status: 500 });
-
-  const logs = (messageLogs ?? []) as Parameters<typeof buildWhatsAppGroupItems>[2];
-
-  return NextResponse.json({ groups: buildWhatsAppGroupItems(groupRows, assignments, logs) });
+  return NextResponse.json({ groups: buildWhatsAppGroupItems(groupRows, assignments) });
 }

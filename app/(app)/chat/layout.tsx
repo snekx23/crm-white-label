@@ -10,7 +10,7 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
   const supabase = await createClient();
   const service = createServiceClient();
 
-  const [{ data: conversations }, { data: waAccount }, { data: groups }, { data: groupMessageLogs }] = await Promise.all([
+  const [{ data: conversations }, { data: waAccount }, { data: groups }] = await Promise.all([
     supabase
       .from("conversations")
       .select(`
@@ -35,16 +35,11 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
       .maybeSingle(),
     service
       .from("whatsapp_groups")
-      .select("id, provider_group_id, subject, description, participant_count, last_event_type, last_event_at, updated_at")
+      .select(
+        "id, provider_group_id, subject, description, participant_count, last_event_type, last_event_at, updated_at, last_message_body, last_message_direction, last_message_at",
+      )
       .eq("tenant_id", ctx.tenantId)
-      .order("last_event_at", { ascending: false, nullsFirst: false })
-      .limit(100),
-    service
-      .from("whatsapp_webhook_logs")
-      .select("contact_lid, from_me, payload, created_at")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("event_type", "GROUP_MESSAGE")
-      .order("created_at", { ascending: false })
+      .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(200),
   ]);
 
@@ -83,8 +78,7 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
     assignments = (data ?? []) as typeof assignments;
   }
 
-  const logs = (groupMessageLogs ?? []) as Parameters<typeof buildWhatsAppGroupItems>[2];
-  const groupItems = buildWhatsAppGroupItems(groupRows, assignments, logs);
+  const groupItems = buildWhatsAppGroupItems(groupRows, assignments);
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden bg-background">
