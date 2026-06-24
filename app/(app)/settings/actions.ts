@@ -53,6 +53,18 @@ export async function removeTenantLogo() {
   revalidatePath("/", "layout");
 }
 
+export async function updateProfileName(fullName: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Nao autenticado");
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: fullName.trim() })
+    .eq("id", user.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/", "layout");
+}
+
 export async function updateTenantMetaSettings(input: {
   meta_pixel_id?: string;
   meta_capi_token?: string;
