@@ -56,6 +56,21 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ lea
 
   const quickMessages = await listQuickMessages();
 
+  const [{ data: professionals }, { data: services }] = await Promise.all([
+    supabase
+      .from("professionals")
+      .select("id, name")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("services")
+      .select("id, name, duration_minutes")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("is_active", true)
+      .order("name"),
+  ]);
+
   return (
     <ChatThread
       leadId={lead.id}
@@ -67,6 +82,8 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ lea
       initialAutomationsEnabled={lead.automations_enabled ?? true}
       initialMessages={messages}
       quickMessages={quickMessages}
+      professionals={professionals ?? []}
+      services={(services ?? []) as { id: string; name: string; duration_minutes: number }[]}
     />
   );
 }

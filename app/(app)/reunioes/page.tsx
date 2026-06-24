@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   CalendarCheck,
   CalendarClock,
+  CalendarPlus,
   Handshake,
   Clock,
   UserX,
@@ -10,6 +11,7 @@ import {
   Target,
   Percent,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -98,6 +100,10 @@ export default async function ReunioesPage({
         title="Dashboard de Reuniões"
         description="Funil de reuniões, taxas de conversão e retorno financeiro."
         actions={
+          <div className="flex items-center gap-3">
+          <Button asChild variant="brand" size="sm">
+            <Link href="/agenda"><CalendarPlus className="h-4 w-4" /> Agendar reuniao</Link>
+          </Button>
           <div className="flex gap-1 rounded-lg border border-border/60 bg-muted/20 p-1">
             {RANGES.map((r) => (
               <Link
@@ -113,6 +119,7 @@ export default async function ReunioesPage({
                 {r.label}
               </Link>
             ))}
+          </div>
           </div>
         }
       />

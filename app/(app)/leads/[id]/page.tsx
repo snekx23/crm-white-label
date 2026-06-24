@@ -11,6 +11,7 @@ import { formatPhoneBR, formatCurrencyBRL, initials } from "@/lib/utils";
 import { LeadStageSelect } from "./lead-stage-select";
 import { LeadFilesPanel } from "./lead-files-panel";
 import { LeadDeleteButton } from "@/components/leads/lead-delete-button";
+import { ScheduleMeetingButton } from "@/components/leads/schedule-meeting-button";
 import { TechnicalProfilePanel } from "./technical-profile-panel";
 import { TaskPanel } from "./task-panel";
 
@@ -28,7 +29,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   if (!lead) notFound();
 
-  const [{ data: stages }, { data: files }, { data: activities }, { data: technicalDefinitions }, { data: tasks }] = await Promise.all([
+  const [{ data: stages }, { data: files }, { data: activities }, { data: technicalDefinitions }, { data: tasks }, { data: professionals }, { data: services }] = await Promise.all([
     supabase
       .from("pipeline_stages")
       .select("id, name, color")
@@ -57,6 +58,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       .eq("lead_id", lead.id)
       .eq("tenant_id", ctx.tenantId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("professionals")
+      .select("id, name")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("services")
+      .select("id, name, duration_minutes")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("is_active", true)
+      .order("name"),
   ]);
 
   return (
@@ -95,6 +108,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
+            <ScheduleMeetingButton
+              leadId={lead.id}
+              leadName={lead.name}
+              professionals={professionals ?? []}
+              services={(services ?? []) as { id: string; name: string; duration_minutes: number }[]}
+            />
             {lead.phone && (
               <Button asChild variant="brand">
                 <Link href={`/chat/${lead.id}`} prefetch>

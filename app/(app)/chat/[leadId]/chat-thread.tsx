@@ -24,6 +24,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { updateLead } from "@/app/(app)/leads/actions";
+import { ScheduleMeetingButton } from "@/components/leads/schedule-meeting-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,6 +102,8 @@ export function ChatThread({
   initialAutomationsEnabled = true,
   initialMessages,
   quickMessages = [],
+  professionals = [],
+  services = [],
 }: {
   leadId: string;
   tenantId: string;
@@ -111,6 +114,8 @@ export function ChatThread({
   initialAutomationsEnabled?: boolean;
   initialMessages: ChatMessage[];
   quickMessages?: QuickMessage[];
+  professionals?: { id: string; name: string }[];
+  services?: { id: string; name: string; duration_minutes: number }[];
 }) {
   const displayPhone = displayLeadSubtitle(leadPhone);
   const [displayName, setDisplayName] = useState(displayLeadName(leadName, leadPhone));
@@ -511,6 +516,14 @@ export function ChatThread({
             {automationsOn ? <Bot className="h-3.5 w-3.5" /> : <BotOff className="h-3.5 w-3.5" />}
             {automationsOn ? "Automações" : "Pausadas"}
           </button>
+          <ScheduleMeetingButton
+            leadId={leadId}
+            leadName={displayName}
+            professionals={professionals}
+            services={services}
+            variant="outline"
+            size="sm"
+          />
           <StatusSelector status={status} onChange={changeStatus} />
           <Button asChild variant="outline" size="sm" className="rounded-lg">
             <Link href={`/leads/${leadId}`} prefetch>
