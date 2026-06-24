@@ -1,14 +1,34 @@
 import Link from "next/link";
 import { MessageSquareText, ArrowRight } from "lucide-react";
 import { requireContext } from "@/lib/tenant";
+import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TenantForm } from "./tenant-form";
+import { ProfileForm } from "./profile-form";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", ctx.userId)
+    .single();
 
   return (
     <div className="space-y-6 p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Meu perfil</CardTitle>
+          <CardDescription>
+            Altere o nome exibido no CRM para sua conta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm currentName={profile?.full_name ?? ""} />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Identidade da empresa</CardTitle>
