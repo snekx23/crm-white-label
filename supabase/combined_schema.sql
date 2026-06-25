@@ -15,6 +15,19 @@ drop policy if exists "tenant_logos_insert" on storage.objects;
 drop policy if exists "tenant_logos_update" on storage.objects;
 drop policy if exists "tenant_logos_delete" on storage.objects;
 
+-- Re-grant schema usage to standard Supabase roles
+grant usage on schema public to postgres, anon, authenticated, service_role;
+
+-- Grant privileges on all existing tables/functions/sequences in public schema
+grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
+
+-- Setup default privileges for all future tables/functions/sequences
+alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+
 -- =====================================================================
 
 -- =====================================================================
