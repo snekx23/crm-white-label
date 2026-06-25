@@ -16,8 +16,8 @@
   },
   "vars": {
     "NEXT_PUBLIC_APP_URL": "https://solaire-w-crm.raminhos6899.workers.dev",
-    "NEXT_PUBLIC_SUPABASE_URL": "https://bwmjtcgfypkqbcthslwr.supabase.co",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3bWp0Y2dmeXBrcWJjdGhzbHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4ODE5MjcsImV4cCI6MjA5NDQ1NzkyN30.uxe4bMPAJNwl_oG5UMGvFSBqxzPzL9_OLkyrNLDZzxo",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://ljzsqkpogyqhgqexigs.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqenNxa3BvZ3locWhncWV4aWdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NDQ4NzMsImV4cCI6MjA5NzEyMDg3M30.u6PsueUEatWLurij6uWJYXACTqY_enc2_xCHB0DVJqM",
     "INSTAGRAM_WEBHOOK_VERIFY_TOKEN": "crm-instagram-verify-2026",
     "WHATSAPP_WEBHOOK_VERIFY_TOKEN": "crm-whatsapp-verify-2026",
     "META_APP_ID": "889382600118573",
