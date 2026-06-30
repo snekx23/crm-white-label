@@ -17,6 +17,7 @@ const leadSchema = z.object({
   notes: z.string().optional(),
   stage_id: z.string().uuid().optional(),
   value_cents: z.number().int().min(0).optional(),
+  cidade: z.string().optional(),
 });
 
 export async function createLead(formData: FormData) {
@@ -33,6 +34,7 @@ export async function createLead(formData: FormData) {
     value_cents: formData.get("value_cents")
       ? Math.round(Number(formData.get("value_cents")) * 100)
       : 0,
+    cidade: formData.get("cidade") || undefined,
   });
 
   let stageId = parsed.stage_id;
@@ -66,6 +68,7 @@ export async function createLead(formData: FormData) {
       stage_id: stageId,
       pipeline_id: pipelineRow?.pipeline_id,
       value_cents: parsed.value_cents ?? 0,
+      custom_fields: { cidade: parsed.cidade || "" },
     })
     .select("id")
     .single();
@@ -73,7 +76,11 @@ export async function createLead(formData: FormData) {
   if (error) throw new Error(error.message);
   if (createdLead) {
     try {
-      await autoAssignLead(createdLead.id);
+      if (ctx.role === "vendedor") {
+        await assignLead({ leadId: createdLead.id, toUserId: ctx.userId, reason: "manual_assign" });
+      } else {
+        await autoAssignLead(createdLead.id);
+      }
     } catch (assignmentError) {
       console.error("Erro ao distribuir lead automaticamente:", assignmentError);
     }
@@ -114,10 +121,20 @@ export async function updateLead(id: string, patch: Partial<{
     try {
       const { data: stageRow } = await supabase
         .from("pipeline_stages")
-        .select("is_won")
+        .select("is_won, name")
         .eq("id", patch.stage_id)
         .eq("tenant_id", ctx.tenantId)
         .single();
+
+      // Trigger standard automation flow event
+      const { fireAutomationTrigger } = await import("@/lib/automations/trigger");
+      void fireAutomationTrigger(ctx.tenantId, "stage_changed", id, { stage_id: patch.stage_id });
+
+      // Trigger post-sales automation for 'Show Fechado' stage
+      if (stageRow?.is_won || stageRow?.name?.toLowerCase().includes("show fechado")) {
+        const { sendPostSalesAutomation } = await import("@/lib/automations/post-sales");
+        void sendPostSalesAutomation(ctx.tenantId, id);
+      }
 
       if (stageRow?.is_won) {
         const { data: leadRow } = await supabase
@@ -164,9 +181,7 @@ export async function updateLead(id: string, patch: Partial<{
 }
 
 export async function moveLeadToStage(leadId: string, stageId: string, position: number) {
-  const ctx = await requireContext();
   await updateLead(leadId, { stage_id: stageId, position });
-  void fireAutomationTrigger(ctx.tenantId, "stage_changed", leadId, { stage_id: stageId });
 }
 
 export async function assignLead(input: {

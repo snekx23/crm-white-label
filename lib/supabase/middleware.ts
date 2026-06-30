@@ -3,7 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./database.types";
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const url = request.nextUrl.clone();
+  console.log(`[middleware] Request path: ${url.pathname}`);
+  
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +24,11 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          response = NextResponse.next({ request });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
@@ -26,14 +37,19 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) {
+    console.error("[middleware] getUser error:", userError);
+  }
+  
+  console.log(`[middleware] User authenticated: ${user ? `${user.email} (${user.id})` : "no"}`);
 
-  const url = request.nextUrl.clone();
   const isLoginRoute = url.pathname.startsWith("/login");
   const isSignupRoute = url.pathname.startsWith("/signup");
   const isAuthRoute = isLoginRoute || isSignupRoute;
   const isPublic =
     isAuthRoute ||
+    url.pathname.startsWith("/forms/") ||
     url.pathname.startsWith("/api/auth/signup") ||
     url.pathname.startsWith("/api/auth/instagram") ||
     url.pathname.startsWith("/api/webhooks") ||
@@ -46,14 +62,17 @@ export async function updateSession(request: NextRequest) {
     url.pathname.startsWith("/favicon");
 
   if (!user && !isPublic) {
+    console.log(`[middleware] User not authenticated on protected route, redirecting to /login`);
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
   if (user && isAuthRoute) {
+    console.log(`[middleware] Authenticated user on auth route, redirecting to /dashboard`);
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
+  console.log(`[middleware] Allowing request to proceed: ${url.pathname}`);
   return response;
 }

@@ -8,9 +8,10 @@ export async function findOrCreateInstagramLead(
     name?: string | null;
     stageId?: string;
     pipelineId?: string;
+    notes?: string | null;
   },
 ): Promise<string | null> {
-  const { senderId, name, stageId, pipelineId } = opts;
+  const { senderId, name, stageId, pipelineId, notes } = opts;
 
   const { data: existing } = await supabase
     .from("leads")
@@ -19,7 +20,15 @@ export async function findOrCreateInstagramLead(
     .eq("instagram_sender_id", senderId)
     .maybeSingle();
 
-  if (existing?.id) return existing.id;
+  if (existing?.id) {
+    if (notes) {
+      await supabase
+        .from("leads")
+        .update({ notes })
+        .eq("id", existing.id);
+    }
+    return existing.id;
+  }
 
   const { data: created, error } = await supabase
     .from("leads")
@@ -30,6 +39,7 @@ export async function findOrCreateInstagramLead(
       source: "instagram",
       pipeline_id: pipelineId ?? null,
       stage_id: stageId ?? null,
+      notes: notes ?? null,
     })
     .select("id")
     .single();

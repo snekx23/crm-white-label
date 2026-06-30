@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
 import type { FileRow } from "@/lib/supabase/database.types";
+import { sendContractsFileToClient } from "@/lib/automations/contracts-dispatch";
 
 export async function getTenantStoragePath(leadId: string): Promise<string> {
   const ctx = await requireContext();
@@ -33,6 +34,14 @@ export async function persistLeadFile(input: {
     .select("*")
     .single();
   if (error) throw new Error(error.message);
+
+  // Trigger automatic WhatsApp dispatch in the background (non-blocking)
+  if (input.name.startsWith("[CONTRATO_EMPENHO]") && input.mimeType === "application/pdf") {
+    sendContractsFileToClient(ctx.tenantId, input.leadId, data as FileRow).catch((err) => {
+      console.error("[file-actions] Error in sendContractsFileToClient background execution:", err);
+    });
+  }
+
   revalidatePath(`/leads/${input.leadId}`);
   return data as FileRow;
 }

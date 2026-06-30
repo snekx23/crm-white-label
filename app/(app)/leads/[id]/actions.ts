@@ -86,3 +86,50 @@ export async function completeLeadTask(taskId: string, leadId: string) {
   if (error) throw new Error(error.message);
   revalidatePath(`/leads/${leadId}`);
 }
+
+export async function updateLeadCityAndNotes(id: string, city: string, notes: string) {
+  const ctx = await requireContext();
+  assertRole(ctx.role, canOperateLead);
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("custom_fields")
+    .eq("id", id)
+    .eq("tenant_id", ctx.tenantId)
+    .single();
+
+  if (!lead) throw new Error("Lead nao encontrado");
+
+  const customFields = {
+    ...((lead.custom_fields ?? {}) as Record<string, unknown>),
+    cidade: city.trim(),
+  };
+
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      notes: notes.trim() || null,
+      custom_fields: customFields,
+    })
+    .eq("id", id)
+    .eq("tenant_id", ctx.tenantId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath(`/leads/${id}`);
+}
+
+export async function updateLeadTags(id: string, tags: string[]) {
+  const ctx = await requireContext();
+  assertRole(ctx.role, canOperateLead);
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ tags })
+    .eq("id", id)
+    .eq("tenant_id", ctx.tenantId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath(`/leads/${id}`);
+}

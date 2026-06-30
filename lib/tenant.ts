@@ -14,24 +14,48 @@ export interface CurrentContext {
 const TENANT_COOKIE = "avante_tenant_id";
 
 export const getCurrentContext = cache(async (): Promise<CurrentContext | null> => {
+  console.log("[getCurrentContext] Called");
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError) {
+    console.error("[getCurrentContext] getUser error:", userError);
+  }
+  
+  if (!user) {
+    console.log("[getCurrentContext] No user found in session");
+    return null;
+  }
+  console.log("[getCurrentContext] User found:", user.email, user.id);
 
   const cookieStore = await cookies();
   const cookieTenant = cookieStore.get(TENANT_COOKIE)?.value;
+  console.log("[getCurrentContext] Cookie tenant:", cookieTenant);
 
-  const { data: memberships } = await supabase
+  const { data: memberships, error: memError } = await supabase
     .from("tenant_members")
     .select("tenant_id, role, tenants(*)")
     .eq("user_id", user.id);
 
-  if (!memberships || memberships.length === 0) return null;
+  if (memError) {
+    console.error("[getCurrentContext] memberships fetch error:", memError);
+    return null;
+  }
+
+  console.log("[getCurrentContext] memberships found count:", memberships?.length);
+
+  if (!memberships || memberships.length === 0) {
+    console.log("[getCurrentContext] No memberships found for user");
+    return null;
+  }
 
   const chosen =
     memberships.find((m) => m.tenant_id === cookieTenant) ?? memberships[0];
 
   const tenant = (chosen as unknown as { tenants: Tenant }).tenants;
+  
+  console.log("[getCurrentContext] Selected tenant:", tenant?.id, tenant?.name);
+  
   return {
     userId: user.id,
     userEmail: user.email ?? "",

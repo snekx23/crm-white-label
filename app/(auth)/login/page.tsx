@@ -13,10 +13,23 @@ import { mapSignupError } from "@/lib/auth/signup-errors";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [activeTab, setActiveTab] = useState<"admin" | "vendedor">("admin");
+  const [email, setEmail] = useState("choppaosuperbanda@gmail.com");
+  const [password, setPassword] = useState("choppao123@");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  function selectTab(tab: "admin" | "vendedor") {
+    setActiveTab(tab);
+    setError(null);
+    if (tab === "admin") {
+      setEmail("choppaosuperbanda@gmail.com");
+      setPassword("choppao123@");
+    } else {
+      setEmail("vendedor@choppao.com");
+      setPassword("choppao123@");
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,9 +48,35 @@ export default function LoginPage() {
 
   return (
     <div>
-      <div className="mb-8 space-y-2">
+      <div className="mb-6 space-y-2">
         <h1 className="font-display text-3xl font-semibold tracking-tight">Bem-vindo de volta</h1>
-        <p className="text-sm text-muted-foreground">Entre com sua conta para acessar o painel</p>
+        <p className="text-sm text-muted-foreground">Escolha o seu perfil de acesso para entrar no painel</p>
+      </div>
+
+      {/* Tabs Selector */}
+      <div className="mb-6 grid w-full grid-cols-2 rounded-lg bg-muted/60 p-1 text-sm text-muted-foreground ring-1 ring-border/50">
+        <button
+          type="button"
+          onClick={() => selectTab("admin")}
+          className={`flex items-center justify-center rounded-md py-2 font-medium transition-all ${
+            activeTab === "admin"
+              ? "bg-background text-foreground shadow-sm ring-1 ring-border/20"
+              : "hover:text-foreground"
+          }`}
+        >
+          🔑 Admin / CRM
+        </button>
+        <button
+          type="button"
+          onClick={() => selectTab("vendedor")}
+          className={`flex items-center justify-center rounded-md py-2 font-medium transition-all ${
+            activeTab === "vendedor"
+              ? "bg-background text-foreground shadow-sm ring-1 ring-border/20"
+              : "hover:text-foreground"
+          }`}
+        >
+          👴 Vendedor (Acesso Simples)
+        </button>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-5">

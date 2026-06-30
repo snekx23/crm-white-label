@@ -81,22 +81,62 @@ export async function POST(req: NextRequest) {
 
       if (existing) continue;
 
-      // Find default pipeline stage
+      // Find default pipeline and resolve Instagram stage dynamically
       const { data: pipeline } = await supabase
         .from("pipelines")
-        .select("id, pipeline_stages(id, position)")
+        .select("id")
         .eq("tenant_id", tenantId)
         .eq("is_default", true)
         .single();
 
-      const stages = (
-        pipeline as { pipeline_stages?: { id: string; position: number }[] } | null
-      )?.pipeline_stages?.sort((a, b) => a.position - b.position);
+      const pipelineId = pipeline?.id;
+      let targetStageId: string | undefined = undefined;
+
+      if (pipelineId) {
+        const { data: currentStages } = await supabase
+          .from("pipeline_stages")
+          .select("id, name, position")
+          .eq("tenant_id", tenantId)
+          .eq("pipeline_id", pipelineId)
+          .order("position");
+
+        const instaStage = currentStages?.find((s) => s.name === "Novos Leads (Instagram)");
+        if (instaStage) {
+          targetStageId = instaStage.id;
+        } else {
+          const minPos = currentStages && currentStages.length > 0
+            ? Math.min(...currentStages.map((s) => s.position))
+            : 0;
+          const newPos = minPos - 1000;
+
+          const { data: newStage, error: insertStageErr } = await supabase
+            .from("pipeline_stages")
+            .insert({
+              tenant_id: tenantId,
+              pipeline_id: pipelineId,
+              name: "Novos Leads (Instagram)",
+              position: newPos,
+              color: "#c084fc",
+              is_won: false,
+              is_lost: false,
+            })
+            .select("id")
+            .single();
+
+          if (insertStageErr) {
+            console.error("[instagram-webhook] Failed to auto-create Instagram stage:", insertStageErr);
+            targetStageId = currentStages?.[0]?.id;
+          } else {
+            targetStageId = newStage?.id;
+          }
+        }
+      }
 
       const leadId = await findOrCreateInstagramLead(supabase, tenantId, {
         senderId,
-        stageId: stages?.[0]?.id,
-        pipelineId: (pipeline as { id?: string } | null)?.id,
+        stageId: targetStageId,
+        pipelineId: pipelineId,
+        notes: body,
       });
 
       if (!leadId) continue;

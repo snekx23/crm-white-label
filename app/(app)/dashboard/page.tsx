@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
+import { canSeeAllLeads } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/app/page-header";
 import { LeadsOpsDashboard } from "@/components/dashboard/leads-ops-dashboard";
 import { formatBRTDateLong, getBRTDayBounds, getBRTYesterdayBounds } from "@/lib/date/brt";
@@ -12,6 +14,9 @@ import {
 
 export default async function DashboardPage() {
   const ctx = await requireContext();
+  if (!canSeeAllLeads(ctx.role)) {
+    redirect("/kanban");
+  }
   const supabase = await createClient();
   const today = getBRTDayBounds();
   const yesterday = getBRTYesterdayBounds();

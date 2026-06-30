@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { processExecution } from "@/lib/automations/execute";
 import { processScheduledMessages } from "@/lib/chat/process-scheduled";
 import { processAppointmentReminders } from "@/lib/agenda/reminders";
+import { processPostSalesReminders } from "@/lib/automations/post-sales-reminders";
+
 
 export const dynamic = "force-dynamic";
 
@@ -65,11 +67,15 @@ export async function POST(req: NextRequest) {
   // Envia confirmações de reunião (12h / 2h / 30min antes)
   const remindersSent = await processAppointmentReminders(supabase);
 
+  // Processa lembretes de pós-venda (3 dias antes do show)
+  const postSalesRemindersSent = await processPostSalesReminders(supabase);
+
   return NextResponse.json({
     ok: true,
     processed,
     resumed: waitingSteps?.length ?? 0,
     scheduledSent,
     remindersSent,
+    postSalesRemindersSent,
   });
 }

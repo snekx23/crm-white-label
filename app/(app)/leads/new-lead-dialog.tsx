@@ -75,6 +75,10 @@ export function NewLeadDialog({ stages }: { stages: { id: string; name: string }
             <Input id="source" name="source" placeholder="instagram, indicacao, site..." />
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="cidade">Cidade / Região</Label>
+            <Input id="cidade" name="cidade" placeholder="Ex: Porto Alegre" />
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="notes">Observacoes</Label>
             <Textarea id="notes" name="notes" rows={3} />
           </div>

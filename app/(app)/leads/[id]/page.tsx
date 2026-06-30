@@ -14,11 +14,17 @@ import { LeadDeleteButton } from "@/components/leads/lead-delete-button";
 import { ScheduleMeetingButton } from "@/components/leads/schedule-meeting-button";
 import { TechnicalProfilePanel } from "./technical-profile-panel";
 import { TaskPanel } from "./task-panel";
+import { LeadDetailsEditor } from "./lead-details-editor";
+import { LeadTagsEditor } from "./lead-tags-editor";
+import { LeadContractsPanel } from "./lead-contracts-panel";
+import { LeadLogisticsPanel } from "./lead-logistics-panel";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
   const supabase = await createClient();
+
+  const isVendedor = ctx.role === "vendedor";
 
   const { data: lead } = await supabase
     .from("leads")
@@ -121,68 +127,107 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 </Link>
               </Button>
             )}
-            <LeadDeleteButton leadId={lead.id} leadName={lead.name} />
+            {!isVendedor && <LeadDeleteButton leadId={lead.id} leadName={lead.name} />}
           </div>
         </div>
       </header>
 
       <div className="grid gap-6 p-8 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {/* Informações Gerais Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Informacoes</CardTitle>
+              <CardTitle>Informações Gerais</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-x-6 gap-y-5 text-sm">
-              <Info label="Estagio">
+            <CardContent className="grid grid-cols-2 gap-x-6 gap-y-5 text-base">
+              <Info label="Estágio">
                 <LeadStageSelect leadId={lead.id} stageId={lead.stage_id} stages={stages ?? []} />
               </Info>
-              <Info label="Valor">
+              <Info label="Valor do Show">
                 <span className="font-mono text-base font-semibold">{formatCurrencyBRL(lead.value_cents)}</span>
               </Info>
               <Info label="Origem">{lead.source ?? "-"}</Info>
-              <Info label="Atualizado">{new Date(lead.updated_at).toLocaleString("pt-BR")}</Info>
-              <Info label="Tags" full>
-                <div className="flex flex-wrap gap-1.5">
-                  {lead.tags?.length
-                    ? lead.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)
-                    : <span className="text-muted-foreground">Sem tags</span>}
-                </div>
-              </Info>
-              <Info label="Observacoes" full>
-                <p className="whitespace-pre-wrap text-muted-foreground">{lead.notes ?? "Sem observacoes."}</p>
-              </Info>
+              <Info label="Última Atualização">{new Date(lead.updated_at).toLocaleString("pt-BR")}</Info>
             </CardContent>
           </Card>
 
-          <TechnicalProfilePanel
+          {/* Tags Editor */}
+          <LeadTagsEditor leadId={lead.id} initialTags={lead.tags || []} />
+
+          {/* Details & Observations Editor */}
+          <LeadDetailsEditor
             leadId={lead.id}
-            definitions={technicalDefinitions ?? []}
-            initialValues={(lead.custom_fields ?? {}) as Record<string, unknown>}
+            initialCity={(lead.custom_fields as any)?.cidade || ""}
+            initialNotes={lead.notes || ""}
           />
+
+          {/* Logistics & Billing Form Panel */}
+          <LeadLogisticsPanel
+            leadId={lead.id}
+            customFields={(lead.custom_fields as any) || {}}
+          />
+
+          {/* Dedicated Contracts & Empenhos PDF Panel */}
+          <LeadContractsPanel
+            leadId={lead.id}
+            files={files ?? []}
+          />
+
+          {!isVendedor && (
+            <TechnicalProfilePanel
+              leadId={lead.id}
+              definitions={technicalDefinitions ?? []}
+              initialValues={(lead.custom_fields ?? {}) as Record<string, unknown>}
+            />
+          )}
 
           <LeadFilesPanel leadId={lead.id} files={files ?? []} />
           <TaskPanel leadId={lead.id} tasks={tasks ?? []} currentUserId={ctx.userId} />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Linha do tempo</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            {(activities ?? []).length === 0 && (
-              <p className="text-muted-foreground">Sem atividades ainda.</p>
-            )}
-            {activities?.map((a) => (
-              <div key={a.id} className="relative pl-6">
-                <span className="absolute left-0 top-1.5 h-2 w-2 rounded-full bg-brand ring-4 ring-brand/15" />
-                <p className="font-medium">{a.kind}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(a.created_at).toLocaleString("pt-BR")}
+        {!isVendedor ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Linha do tempo</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              {(activities ?? []).length === 0 && (
+                <p className="text-muted-foreground">Sem atividades ainda.</p>
+              )}
+              {activities?.map((a) => (
+                <div key={a.id} className="relative pl-6">
+                  <span className="absolute left-0 top-1.5 h-2 w-2 rounded-full bg-brand ring-4 ring-brand/15" />
+                  <p className="font-medium">{a.kind}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(a.created_at).toLocaleString("pt-BR")}
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : (
+          /* Simplified Vendedor Sidebar: highlights of the client details */
+          <div className="space-y-6">
+            <Card className="border-brand-muted bg-brand-muted/10">
+              <CardHeader>
+                <CardTitle className="text-brand font-bold text-lg flex items-center gap-2">
+                  ℹ️ Dicas de Venda
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-base leading-relaxed text-muted-foreground space-y-3">
+                <p>
+                  1. Mantenha as observações sempre atualizadas com a última conversa.
                 </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                <p>
+                  2. Anexe o **Contrato** ou **Nota de Empenho** na seção de arquivos assim que receber do contratante.
+                </p>
+                <p>
+                  3. Use as **Etiquetas** para saber rapidamente quais prefeituras/clubes estão com negociação fria ou quente.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

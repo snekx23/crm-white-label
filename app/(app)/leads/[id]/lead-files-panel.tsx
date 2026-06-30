@@ -17,6 +17,8 @@ export function LeadFilesPanel({ leadId, files }: { leadId: string; files: FileR
   const [pending, start] = useTransition();
   const [list, setList] = useState(files);
 
+  const genericFiles = list.filter((f) => !f.name.startsWith("[CONTRATO_EMPENHO]"));
+
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -59,7 +61,7 @@ export function LeadFilesPanel({ leadId, files }: { leadId: string; files: FileR
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Arquivos</CardTitle>
+        <CardTitle>Arquivos Gerais</CardTitle>
         <label>
           <input type="file" className="hidden" onChange={onUpload} disabled={pending} />
           <Button asChild variant="outline" size="sm">
@@ -71,11 +73,11 @@ export function LeadFilesPanel({ leadId, files }: { leadId: string; files: FileR
         </label>
       </CardHeader>
       <CardContent>
-        {list.length === 0 ? (
+        {genericFiles.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhum arquivo anexado.</p>
         ) : (
           <ul className="space-y-2">
-            {list.map((f) => (
+            {genericFiles.map((f) => (
               <li key={f.id} className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
                 <span className="truncate">{f.name}</span>
                 <span className="flex gap-1">

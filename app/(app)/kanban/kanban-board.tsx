@@ -31,6 +31,7 @@ type Lead = {
   stage_id: string | null;
   position: number;
   source: string | null;
+  notes?: string | null;
 };
 
 export function KanbanBoard({
@@ -215,35 +216,62 @@ function LeadCard({ lead, dragging, stageColor }: { lead: Lead; dragging?: boole
     transition,
     opacity: isDragging || dragging ? 0.4 : 1,
   };
+  const isInstagram = lead.source === "instagram";
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className="group cursor-grab rounded-lg border border-border/70 bg-card p-3.5 shadow-elev-1 transition-colors duration-150 hover:border-brand/35 hover:shadow-elev-2 active:cursor-grabbing"
+      className={`group cursor-grab rounded-lg border p-3.5 shadow-elev-1 transition-colors duration-150 active:cursor-grabbing ${
+        isInstagram 
+          ? "border-purple-400 bg-purple-50/10 hover:border-purple-500 hover:bg-purple-50/15" 
+          : "border-border/70 bg-card hover:border-brand/35 hover:shadow-elev-2"
+      }`}
     >
       <Link
         href={`/leads/${lead.id}`}
         onPointerDown={(e) => e.stopPropagation()}
-        className="block font-medium leading-tight transition-colors group-hover:text-brand"
+        className={`block font-bold leading-tight transition-colors ${
+          isInstagram ? "text-purple-700 dark:text-purple-400 group-hover:text-purple-800" : "group-hover:text-brand"
+        }`}
       >
-        {lead.name}
+        {isInstagram ? (lead.name.startsWith("@") ? lead.name : `@${lead.name}`) : lead.name}
       </Link>
-      {lead.phone && (
+      {isInstagram && lead.notes && (
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 italic line-clamp-2 bg-purple-500/5 p-2 rounded-md">
+          "{lead.notes}"
+        </p>
+      )}
+      {!isInstagram && lead.phone && (
         <div className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
           <Phone className="h-3 w-3" />
           {formatPhoneBR(lead.phone)}
         </div>
       )}
-      <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5 text-[11px]">
-        {lead.source ? (
-          <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">{lead.source}</span>
-        ) : <span />}
-        <span className="font-mono font-semibold" style={{ color: stageColor }}>
-          {formatCurrencyBRL(lead.value_cents)}
-        </span>
-      </div>
+      {isInstagram ? (
+        <div className="mt-3 pt-2.5 border-t border-purple-200/50 flex flex-col gap-2">
+          <span className="self-start text-[10px] uppercase font-bold tracking-wider text-purple-600 bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">
+            Instagram DM
+          </span>
+          <Link
+            href={`/chat/${lead.id}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="w-full text-center py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-md shadow-sm transition-colors hover:shadow-md cursor-pointer shrink-0 block"
+          >
+            Visualizar e Responder
+          </Link>
+        </div>
+      ) : (
+        <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5 text-[11px]">
+          {lead.source ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">{lead.source}</span>
+          ) : <span />}
+          <span className="font-mono font-semibold" style={{ color: stageColor }}>
+            {formatCurrencyBRL(lead.value_cents)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

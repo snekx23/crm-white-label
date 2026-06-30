@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/tenant";
+import { canSeeAllLeads } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/app/page-header";
 import { KanbanBoard } from "./kanban-board";
 
@@ -17,6 +18,18 @@ export default async function KanbanPage({ searchParams }: { searchParams?: Prom
     pipelines?.find((pipeline) => pipeline.is_default) ??
     pipelines?.[0];
 
+  const showAll = canSeeAllLeads(ctx.role);
+
+  let leadsQuery = supabase
+    .from("leads")
+    .select("id, name, phone, value_cents, stage_id, position, source, notes")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("pipeline_id", activePipeline?.id ?? "");
+
+  if (!showAll) {
+    leadsQuery = leadsQuery.eq("assigned_to", ctx.userId);
+  }
+
   const [{ data: stages }, { data: leads }] = activePipeline
     ? await Promise.all([
         supabase
@@ -25,12 +38,7 @@ export default async function KanbanPage({ searchParams }: { searchParams?: Prom
           .eq("tenant_id", ctx.tenantId)
           .eq("pipeline_id", activePipeline.id)
           .order("position"),
-        supabase
-          .from("leads")
-          .select("id, name, phone, value_cents, stage_id, position, source")
-          .eq("tenant_id", ctx.tenantId)
-          .eq("pipeline_id", activePipeline.id)
-          .order("position"),
+        leadsQuery.order("position"),
       ])
     : [{ data: [] }, { data: [] }];
 

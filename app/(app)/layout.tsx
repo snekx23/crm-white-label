@@ -43,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           tenantTagline={ctx.tenant.tagline}
           userName={profile?.full_name ?? "Usuario"}
           userEmail={ctx.userEmail}
+          role={ctx.role}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
