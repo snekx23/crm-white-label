@@ -38,16 +38,11 @@ export async function sendPostSalesAutomation(tenantId: string, leadId: string) 
       return;
     }
 
-    // 3. Resolve Form URL (use Google Form if configured, otherwise fallback to native CRM form)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://solaire-w-crm.guigui-couto23.workers.dev";
-    const googleFormUrl = process.env.GOOGLE_FORM_URL;
-    let formUrl = `${appUrl}/forms/post-sales/${leadId}`;
-    
-    if (googleFormUrl) {
-      formUrl = googleFormUrl.includes("?")
-        ? `${googleFormUrl}&entry.leadId=${leadId}`
-        : `${googleFormUrl}?entry.leadId=${leadId}`;
-    }
+    // 3. Resolve Form URL (using Google Form link as base)
+    const googleFormUrl = process.env.GOOGLE_FORM_URL || "https://forms.gle/e3SArkW7waWan7EK7";
+    const formUrl = googleFormUrl.includes("?")
+      ? `${googleFormUrl}&entry.leadId=${leadId}`
+      : `${googleFormUrl}?entry.leadId=${leadId}`;
 
     const message = `Olá, ${lead.name}! Que notícia maravilhosa! Fechamos a data para o show da Super Banda Choppão! 🎶🕺
 
