@@ -159,6 +159,31 @@ Qualquer dúvida, estamos à disposição!`;
       status: "open",
     });
 
+    // 9. Fire external integration webhook (Make/Zapier) if configured
+    const integrationWebhookUrl = process.env.INTEGRATION_WEBHOOK_URL;
+    if (integrationWebhookUrl) {
+      try {
+        console.log("[post-sales] Invoking integration webhook:", integrationWebhookUrl);
+        const cleanPhone = lead.phone ? lead.phone.replace(/\D/g, "") : null;
+        
+        await fetch(integrationWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "lead.closed_show",
+            tenantId,
+            leadId,
+            name: lead.name,
+            phone: cleanPhone,
+            email: lead.email,
+            formUrl,
+          }),
+        });
+      } catch (webhookErr) {
+        console.error("[post-sales] Robust Catch - Failed to invoke integration webhook:", webhookErr);
+      }
+    }
+
   } catch (err) {
     console.error("[post-sales] Critical error in post sales automation flow:", err);
   }
