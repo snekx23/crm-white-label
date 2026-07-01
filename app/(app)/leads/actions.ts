@@ -130,8 +130,12 @@ export async function updateLead(id: string, patch: Partial<{
       const { fireAutomationTrigger } = await import("@/lib/automations/trigger");
       void fireAutomationTrigger(ctx.tenantId, "stage_changed", id, { stage_id: patch.stage_id });
 
-      // Trigger post-sales automation for 'Show Fechado' stage
-      if (stageRow?.is_won || stageRow?.name?.toLowerCase().includes("show fechado")) {
+      // Trigger post-sales automation for 'Show Fechado' or 'Fechou Evento' stage
+      if (
+        stageRow?.is_won ||
+        stageRow?.name?.toLowerCase().includes("show fechado") ||
+        stageRow?.name?.toLowerCase().includes("fechou evento")
+      ) {
         const { sendPostSalesAutomation } = await import("@/lib/automations/post-sales");
         void sendPostSalesAutomation(ctx.tenantId, id);
       }

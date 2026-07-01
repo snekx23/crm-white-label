@@ -38,12 +38,21 @@ export async function sendPostSalesAutomation(tenantId: string, leadId: string) 
       return;
     }
 
-    // 3. Format message
+    // 3. Resolve Form URL (use Google Form if configured, otherwise fallback to native CRM form)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://solaire-w-crm.guigui-couto23.workers.dev";
+    const googleFormUrl = process.env.GOOGLE_FORM_URL;
+    let formUrl = `${appUrl}/forms/post-sales/${leadId}`;
+    
+    if (googleFormUrl) {
+      formUrl = googleFormUrl.includes("?")
+        ? `${googleFormUrl}&entry.leadId=${leadId}`
+        : `${googleFormUrl}?entry.leadId=${leadId}`;
+    }
+
     const message = `Olá, ${lead.name}! Que notícia maravilhosa! Fechamos a data para o show da Super Banda Choppão! 🎶🕺
 
 Para organizarmos os detalhes logísticos do evento (horários, endereço, faturamento e rider técnico), por favor preencha o nosso formulário pelo link abaixo:
-👉 ${appUrl}/forms/post-sales/${leadId}
+👉 ${formUrl}
 
 Além disso, solicitamos o envio do contrato assinado ou da Nota de Empenho assim que possível pelo nosso canal de atendimento.
 
