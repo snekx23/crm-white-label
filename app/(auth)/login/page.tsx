@@ -75,7 +75,7 @@ export default function LoginPage() {
               : "hover:text-foreground"
           }`}
         >
-          👴 Vendedor (Acesso Simples)
+          👴 Vendedor
         </button>
       </div>
 
