@@ -37,15 +37,15 @@ export function LeadDetailsEditor({
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-6 rounded-xl border border-border/75 bg-card p-6 shadow-sm">
+    <form onSubmit={handleSave} className="space-y-6 rounded-xl border-2 border-brand/50 bg-card p-6 shadow-sm ring-1 ring-brand/10">
       <div className="space-y-4">
-        <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
-          Observações & Localidade
+        <h2 className="font-display text-2xl font-black tracking-tight text-brand flex items-center gap-2">
+          📝 Observações do Cliente & Localidade
         </h2>
         
         {/* City Input */}
         <div className="space-y-2">
-          <Label htmlFor="city-input" className="text-base font-bold">
+          <Label htmlFor="city-input" className="text-lg font-bold text-slate-800">
             Cidade / Região do Show
           </Label>
           <Input
@@ -53,31 +53,31 @@ export function LeadDetailsEditor({
             value={city}
             onChange={(e) => setCity(e.target.value)}
             placeholder="Ex: Porto Alegre, Gramado, etc."
-            className="h-12 text-base font-medium px-4"
+            className="h-12 text-base font-semibold px-4"
           />
         </div>
 
         {/* Notes Textarea */}
         <div className="space-y-2">
-          <Label htmlFor="notes-input" className="text-base font-bold">
-            Anotações de Conversa / Histórico
+          <Label htmlFor="notes-input" className="text-lg font-bold text-slate-800">
+            Anotações de Conversa / Histórico (Telefone & WhatsApp)
           </Label>
           <Textarea
             id="notes-input"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Digite aqui tudo o que conversou com o cliente (datas preferidas, valores combinados, etc.)."
-            rows={6}
-            className="text-lg leading-relaxed px-4 py-3"
+            rows={7}
+            className="text-lg leading-relaxed px-4 py-3 font-medium"
           />
         </div>
       </div>
 
       {message && (
         <div
-          className={`rounded-md p-3 text-sm font-medium ${
+          className={`rounded-md p-3 text-base font-bold ${
             message.type === "success"
-              ? "bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400"
+              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
               : "bg-destructive/10 border border-destructive/20 text-destructive"
           }`}
         >
@@ -87,14 +87,13 @@ export function LeadDetailsEditor({
 
       <Button
         type="submit"
-        variant="brand"
         size="lg"
-        className="w-full h-12 text-base font-bold shadow-md"
+        className="w-full h-14 text-lg font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white hover:scale-101 active:scale-99 transition-all shrink-0"
         disabled={pending}
       >
         {pending ? (
           <>
-            <Loader2 className="h-5 w-5 animate-spin" /> Salvando...
+            <Loader2 className="h-6 w-6 animate-spin" /> Salvando...
           </>
         ) : (
           "Salvar Observações"

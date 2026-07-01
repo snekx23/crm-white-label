@@ -3,9 +3,30 @@
 import { useState, useTransition } from "react";
 import { updateLeadTags } from "./actions";
 
-const PRESET_TAGS = ["Prefeitura", "Clube", "Baile", "Contato Inicial", "Frio", "Show Fechado"];
+const PRESET_TAGS = ["Aguardando Empenho", "Confirmado", "Urgente", "Prefeitura", "Clube", "Baile"];
 
 const TAG_COLORS: Record<string, { bg: string; text: string; border: string; activeBg: string; activeText: string }> = {
+  "Aguardando Empenho": { 
+    bg: "bg-amber-50/50 dark:bg-amber-950/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/40", 
+    activeBg: "bg-amber-600 hover:bg-amber-700 text-white border-amber-600",
+    text: "text-amber-700 dark:text-amber-400",
+    border: "border-amber-200 dark:border-amber-900/40",
+    activeText: "text-white"
+  },
+  "Confirmado": { 
+    bg: "bg-emerald-50/50 dark:bg-emerald-950/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40", 
+    activeBg: "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600",
+    text: "text-emerald-700 dark:text-emerald-400",
+    border: "border-emerald-200 dark:border-emerald-900/40",
+    activeText: "text-white"
+  },
+  "Urgente": { 
+    bg: "bg-red-50/50 dark:bg-red-950/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/40", 
+    activeBg: "bg-red-600 hover:bg-red-700 text-white border-red-600",
+    text: "text-red-700 dark:text-red-400",
+    border: "border-red-200 dark:border-red-900/40",
+    activeText: "text-white"
+  },
   "Prefeitura": { 
     bg: "bg-blue-50/50 dark:bg-blue-950/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/40", 
     activeBg: "bg-blue-600 hover:bg-blue-700 text-white border-blue-600",
@@ -25,27 +46,6 @@ const TAG_COLORS: Record<string, { bg: string; text: string; border: string; act
     activeBg: "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600",
     text: "text-indigo-700 dark:text-indigo-400",
     border: "border-indigo-200 dark:border-indigo-900/40",
-    activeText: "text-white"
-  },
-  "Contato Inicial": { 
-    bg: "bg-amber-50/50 dark:bg-amber-950/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/40", 
-    activeBg: "bg-amber-600 hover:bg-amber-700 text-white border-amber-600",
-    text: "text-amber-700 dark:text-amber-400",
-    border: "border-amber-200 dark:border-amber-900/40",
-    activeText: "text-white"
-  },
-  "Frio": { 
-    bg: "bg-cyan-50/50 dark:bg-cyan-950/10 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/40", 
-    activeBg: "bg-cyan-600 hover:bg-cyan-700 text-white border-cyan-600",
-    text: "text-cyan-700 dark:text-cyan-400",
-    border: "border-cyan-200 dark:border-cyan-900/40",
-    activeText: "text-white"
-  },
-  "Show Fechado": { 
-    bg: "bg-emerald-50/50 dark:bg-emerald-950/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40", 
-    activeBg: "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600",
-    text: "text-emerald-700 dark:text-emerald-400",
-    border: "border-emerald-200 dark:border-emerald-900/40",
     activeText: "text-white"
   },
 };
