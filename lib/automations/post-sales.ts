@@ -39,7 +39,7 @@ export async function sendPostSalesAutomation(tenantId: string, leadId: string) 
     }
 
     // 3. Resolve Form URL (using Google Form link as base)
-    const googleFormUrl = process.env.GOOGLE_FORM_URL || "https://forms.gle/e3SArkW7waWan7EK7";
+    const googleFormUrl = process.env.GOOGLE_FORM_URL || "https://forms.gle/fEM6bsw3ajeyRDmg7";
     const formUrl = googleFormUrl.includes("?")
       ? `${googleFormUrl}&entry.leadId=${leadId}`
       : `${googleFormUrl}?entry.leadId=${leadId}`;
