@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/wrangler.json",
-  "name": "solaire-w-crm",
+  "name": "crmwhitelabelchop",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
