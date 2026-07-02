@@ -22,10 +22,10 @@ export function LeadLogisticsPanel({
   const billingName = customFields?.faturamento_razao;
   const submitted = customFields?.logistics_submitted === true;
 
-  const appUrl = typeof window !== "undefined"
-    ? window.location.origin
-    : "https://solaire-w-crm.guigui-couto23.workers.dev";
-  const formUrl = `${appUrl}/forms/post-sales/${leadId}`;
+  const googleFormUrl = process.env.NEXT_PUBLIC_GOOGLE_FORM_URL || "https://forms.gle/fEM6bsw3ajeyRDmg7";
+  const formUrl = googleFormUrl.includes("?")
+    ? `${googleFormUrl}&entry.leadId=${leadId}`
+    : `${googleFormUrl}?entry.leadId=${leadId}`;
 
   async function handleCopy() {
     try {
